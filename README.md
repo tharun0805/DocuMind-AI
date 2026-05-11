@@ -1,0 +1,2 @@
+# DocuMind-AI
+DocuMind-AI is an advanced, agentic RAG platform designed to transform static documents into interactive knowledge assets. By leveraging LangGraph for multi-agent orchestration and a Hybrid Search engine (FAISS + BM25), It provides high-precision answers, performs complex data reasoning, maintains structural context across different format files
