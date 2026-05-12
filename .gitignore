@@ -1,84 +1,11 @@
-# === SECRETS — NEVER COMMIT ===
 .env
-.envrc
-.streamlit/secrets.toml
-
-# === Python ===
-__pycache__/
-*.py[cod]
-*.py[codz]
-*.pyo
-*.pyd
-*$py.class
-*.so
-*.egg
-*.egg-info/
-MANIFEST
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
-.installed.cfg
-
-# === Virtual Environment ===
-.venv
+.venv/
 venv/
-env/
-ENV/
-venv.bak/
-env.bak/
-
-# === FAISS & Vector Store ===
-vector_store/*.index
-vector_store/*.pkl
-
-# === Logs ===
-logs/
-*.log
-
-# === Testing ===
+__pycache__/
+*.pyc
 .pytest_cache/
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-coverage.xml
-*.cover
-nosetests.xml
-.hypothesis/
-
-# === OS files ===
-.DS_Store
-Thumbs.db
-
-# === IDE ===
-.idea/
-.vscode/
-*.swp
-tempCodeRunnerFile.py
-
-# === Docker ===
-*.override.yml
-
-# === Other tools ===
 .mypy_cache/
 .ruff_cache/
-.pytype/
-.pyre/
-.pdm-python
-.pdm-build/
-.pixi
-__pypackages__/
-.ipynb_checkpoints
-.pypirc
+.cache/
+vector_db/
+logs/
