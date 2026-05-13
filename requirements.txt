@@ -1,5 +1,6 @@
 langchain>=0.2.0
 langchain-text-splitters
+langchain-core
 langchain-community>=0.2.0
 langchain-google-genai
 langgraph
