@@ -2,6 +2,9 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from utils.validator import validate_file, validate_question
+from utils.error_handler import handle_error
+from utils.performance import PerformanceTracker
 import os
 import tempfile
 import streamlit as st
@@ -54,29 +57,42 @@ def process_document(uploaded_file) -> bool:
             tmp.write(uploaded_file.getvalue())
             tmp_path = tmp.name
 
+        is_valid, message = validate_file(tmp_path)
+        if not is_valid:
+            show_error(message)
+            return False
+
         st.session_state.file_path = tmp_path
         st.session_state.document_name = uploaded_file.name
 
+        tracker = PerformanceTracker()
+
+        tracker.start("document_reading")
         with st.spinner("📖 Reading document..."):
             text = load_document(tmp_path)
+        tracker.end("document_reading")
 
+        tracker.start("chunking")
         with st.spinner("✂️ Chunking document..."):
             chunks = chunk_text(text)
+        tracker.end("chunking")
 
+        tracker.start("indexing")
         with st.spinner("🔢 Creating embeddings and indexes..."):
             create_vector_store(chunks)
             create_bm25_index(chunks)
+        tracker.end("indexing")
 
         st.session_state.document_processed = True
         st.session_state.memory = SessionMemory()
         st.session_state.chat_history = []
 
-        logger.info(f"Document processed: {uploaded_file.name}")
+        logger.info(f"Document processed successfully: {uploaded_file.name}")
         return True
 
     except Exception as e:
-        logger.error(f"Document processing error: {str(e)}")
-        show_error(f"Error processing document: {str(e)}")
+        error_message = handle_error(e, context="document_processing")
+        show_error(error_message)
         return False
 
 
@@ -184,6 +200,11 @@ def main():
     )
 
     if question:
+        is_valid, validation_message = validate_question(question)
+
+    if not is_valid:
+        show_warning(validation_message)
+    else:
         show_chat_message("human", question)
         st.session_state.chat_history.append({
             "role": "human",
@@ -192,11 +213,16 @@ def main():
 
         with show_thinking():
             try:
+                tracker = PerformanceTracker()
+                tracker.start("full_workflow")
+
                 answer = run_workflow(
                     question=question,
                     memory=st.session_state.memory,
                     file_path=st.session_state.file_path
                 )
+
+                tracker.end("full_workflow")
 
                 show_chat_message("assistant", answer)
                 st.session_state.chat_history.append({
@@ -205,9 +231,8 @@ def main():
                 })
 
             except Exception as e:
-                error_msg = f"Error generating answer: {str(e)}"
-                show_error(error_msg)
-                logger.error(error_msg)
+                error_message = handle_error(e, context="workflow")
+                show_error(error_message)
 
 
 if __name__ == "__main__":
