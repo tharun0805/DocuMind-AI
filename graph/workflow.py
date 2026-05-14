@@ -4,6 +4,7 @@ from agents.intent_agent import classify_intent
 from agents.planner_agent import plan_route
 from agents.retriever_agent import retrieve_context
 from agents.qa_agent import generate_answer
+from agents.dataframe_agent import run_dataframe_agent
 from memory.session_memory import SessionMemory
 from loguru import logger
 
@@ -15,6 +16,7 @@ class AgentState(TypedDict):
     context: str
     answer: str
     chat_history: str
+    file_path: str
 
 
 def intent_node(state: AgentState) -> AgentState:
@@ -45,8 +47,17 @@ def qa_node(state: AgentState) -> AgentState:
     return state
 
 
+def dataframe_node(state: AgentState) -> AgentState:
+    logger.info("Running DataFrame node...")
+    state["answer"] = run_dataframe_agent(
+        question=state["question"],
+        file_path=state["file_path"]
+    )
+    return state
+
+
 def route_decision(state: AgentState) -> str:
-    if state["route"] == "dataframe":
+    if state["route"] == "dataframe" and state["file_path"]:
         return "dataframe"
     return "retriever"
 
@@ -58,6 +69,7 @@ def build_workflow():
     workflow.add_node("planner", planner_node)
     workflow.add_node("retriever", retriever_node)
     workflow.add_node("qa", qa_node)
+    workflow.add_node("dataframe", dataframe_node)
 
     workflow.set_entry_point("intent")
     workflow.add_edge("intent", "planner")
@@ -67,17 +79,22 @@ def build_workflow():
         route_decision,
         {
             "retriever": "retriever",
-            "dataframe": "retriever"
+            "dataframe": "dataframe"
         }
     )
 
     workflow.add_edge("retriever", "qa")
+    workflow.add_edge("dataframe", END)
     workflow.add_edge("qa", END)
 
     return workflow.compile()
 
 
-def run_workflow(question: str, memory: SessionMemory = None) -> str:
+def run_workflow(
+    question: str,
+    memory: SessionMemory = None,
+    file_path: str = ""
+) -> str:
     logger.info(f"Running workflow for: {question}")
 
     app = build_workflow()
@@ -92,7 +109,8 @@ def run_workflow(question: str, memory: SessionMemory = None) -> str:
         route="",
         context="",
         answer="",
-        chat_history=chat_history
+        chat_history=chat_history,
+        file_path=file_path
     )
 
     final_state = app.invoke(initial_state)
