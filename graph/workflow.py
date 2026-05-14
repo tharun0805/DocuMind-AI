@@ -4,6 +4,7 @@ from agents.intent_agent import classify_intent
 from agents.planner_agent import plan_route
 from agents.retriever_agent import retrieve_context
 from agents.qa_agent import generate_answer
+from memory.session_memory import SessionMemory
 from loguru import logger
 
 
@@ -13,6 +14,7 @@ class AgentState(TypedDict):
     route: str
     context: str
     answer: str
+    chat_history: str
 
 
 def intent_node(state: AgentState) -> AgentState:
@@ -35,7 +37,11 @@ def retriever_node(state: AgentState) -> AgentState:
 
 def qa_node(state: AgentState) -> AgentState:
     logger.info("Running QA node...")
-    state["answer"] = generate_answer(state["question"], state["context"])
+    state["answer"] = generate_answer(
+        question=state["question"],
+        context=state["context"],
+        chat_history=state["chat_history"]
+    )
     return state
 
 
@@ -54,7 +60,6 @@ def build_workflow():
     workflow.add_node("qa", qa_node)
 
     workflow.set_entry_point("intent")
-
     workflow.add_edge("intent", "planner")
 
     workflow.add_conditional_edges(
@@ -72,18 +77,29 @@ def build_workflow():
     return workflow.compile()
 
 
-def run_workflow(question: str) -> str:
-    logger.info(f"Running workflow for question: {question}")
+def run_workflow(question: str, memory: SessionMemory = None) -> str:
+    logger.info(f"Running workflow for: {question}")
 
     app = build_workflow()
+
+    chat_history = ""
+    if memory and not memory.is_empty():
+        chat_history = memory.get_history_as_text()
 
     initial_state = AgentState(
         question=question,
         intent="",
         route="",
         context="",
-        answer=""
+        answer="",
+        chat_history=chat_history
     )
 
     final_state = app.invoke(initial_state)
-    return final_state["answer"]
+    answer = final_state["answer"]
+
+    if memory is not None:
+        memory.add_human_message(question)
+        memory.add_ai_message(answer)
+
+    return answer

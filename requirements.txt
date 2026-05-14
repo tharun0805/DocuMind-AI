@@ -18,3 +18,4 @@ streamlit
 loguru
 python-dotenv
 tiktoken
+langchain-huggingface

@@ -13,30 +13,65 @@ def get_llm():
     )
 
 
-def generate_answer(question: str, context: str) -> str:
+def generate_answer(
+    question: str,
+    context: str,
+    chat_history: str = ""
+) -> str:
     logger.info("Generating answer using QA agent...")
 
-    prompt = PromptTemplate(
-        input_variables=["context", "question"],
-        template="""
-        You are an intelligent document assistant.
-        Answer the question using only the context provided below.
-        If the answer is not in the context, say "I could not find this information in the document."
-        Always be precise and cite which part of the context your answer comes from.
+    if chat_history:
+        prompt = PromptTemplate(
+            input_variables=["context", "question", "chat_history"],
+            template="""
+            You are an intelligent document assistant.
+            You have access to the document context and previous conversation history.
+            Use both to answer the question accurately.
+            If the answer is not in the context, say "I could not find this information in the document."
+            Always be precise and reference the document when possible.
 
-        Context:
-        {context}
+            Previous Conversation:
+            {chat_history}
 
-        Question: {question}
+            Document Context:
+            {context}
 
-        Answer:
-        """
-    )
+            Current Question: {question}
+
+            Answer:
+            """
+        )
+        inputs = {
+            "context": context,
+            "question": question,
+            "chat_history": chat_history
+        }
+    else:
+        prompt = PromptTemplate(
+            input_variables=["context", "question"],
+            template="""
+            You are an intelligent document assistant.
+            Answer the question using only the context provided below.
+            If the answer is not in the context, say "I could not find this information in the document."
+            Always be precise and cite which part of the context your answer comes from.
+
+            Context:
+            {context}
+
+            Question: {question}
+
+            Answer:
+            """
+        )
+        inputs = {
+            "context": context,
+            "question": question
+        }
 
     for attempt in range(3):
         try:
             chain = prompt | get_llm()
-            result = chain.invoke({"context": context, "question": question})
+            result = chain.invoke(inputs)
             logger.info("Answer generated successfully")
             return result.content.strip()
         except Exception as e:
