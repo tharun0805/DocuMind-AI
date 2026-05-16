@@ -25,6 +25,7 @@ from app.ui_components import (
     show_error,
     show_file_info,
     show_stats,
+    show_warning,
     show_thinking
 )
 

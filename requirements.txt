@@ -19,3 +19,8 @@ loguru
 python-dotenv
 tiktoken
 langchain-huggingface
+youtube-search-python
+googlesearch-python
+speechrecognition
+streamlit-mic-recorder
+reportlab
