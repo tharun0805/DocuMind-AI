@@ -10,3 +10,5 @@ __pycache__/
 vector_db/
 logs/
 sample_data/
+output.xlsx
+output*.xlsx
