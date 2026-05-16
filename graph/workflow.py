@@ -17,6 +17,8 @@ class AgentState(TypedDict):
     answer: str
     chat_history: str
     file_path: str
+    evidence: list
+    answer_mode: str
 
 
 def intent_node(state: AgentState) -> AgentState:
@@ -39,11 +41,14 @@ def retriever_node(state: AgentState) -> AgentState:
 
 def qa_node(state: AgentState) -> AgentState:
     logger.info("Running QA node...")
-    state["answer"] = generate_answer(
+    result = generate_answer(
         question=state["question"],
         context=state["context"],
-        chat_history=state["chat_history"]
+        chat_history=state["chat_history"],
+        answer_mode=state.get("answer_mode", "detailed")
     )
+    state["answer"] = result["answer"]
+    state["evidence"] = result["evidence"]
     return state
 
 
@@ -53,6 +58,7 @@ def dataframe_node(state: AgentState) -> AgentState:
         question=state["question"],
         file_path=state["file_path"]
     )
+    state["evidence"] = []
     return state
 
 
@@ -93,8 +99,9 @@ def build_workflow():
 def run_workflow(
     question: str,
     memory: SessionMemory = None,
-    file_path: str = ""
-) -> str:
+    file_path: str = "",
+    answer_mode: str = "detailed"
+) -> dict:
     logger.info(f"Running workflow for: {question}")
 
     app = build_workflow()
@@ -110,14 +117,20 @@ def run_workflow(
         context="",
         answer="",
         chat_history=chat_history,
-        file_path=file_path
+        file_path=file_path,
+        evidence=[],
+        answer_mode=answer_mode
     )
 
     final_state = app.invoke(initial_state)
     answer = final_state["answer"]
+    evidence = final_state.get("evidence", [])
 
     if memory is not None:
         memory.add_human_message(question)
         memory.add_ai_message(answer)
 
-    return answer
+    return {
+        "answer": answer,
+        "evidence": evidence
+    }
