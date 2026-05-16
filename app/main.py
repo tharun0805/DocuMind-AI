@@ -4,6 +4,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import tempfile
 import streamlit as st
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from loguru import logger
 
 from ingestion.document_loader import load_document
@@ -24,7 +25,6 @@ from agents.voice_agent import transcribe_audio_file
 from agents.document_map_agent import extract_document_map
 from agents.selection_agent import ask_about_selection
 from agents.multi_document_agent import query_multiple_documents
-from agents.preview_agent import generate_preview
 from tools.file_export_tool import export_as_txt, export_as_docx
 from utils.validator import validate_file, validate_question
 from utils.error_handler import handle_error
@@ -70,11 +70,77 @@ def initialize_session():
         "pending_question": None,
         "clarification_questions": [],
         "awaiting_clarification": False,
-        "multi_documents": []
+        "multi_documents": [],
+        "insights_loaded": False,
+        "entities_loaded": False,
+        "map_loaded": False
     }
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value
+
+
+@st.cache_data(show_spinner=False)
+def cached_extract_entities(text_sample: str) -> dict:
+    return extract_entities(text_sample)
+
+
+@st.cache_data(show_spinner=False)
+def cached_generate_insights(text_sample: str) -> dict:
+    return generate_insights(text_sample)
+
+
+@st.cache_data(show_spinner=False)
+def cached_document_map(text_sample: str) -> list:
+    return extract_document_map(text_sample)
+
+
+@st.cache_data(show_spinner=False)
+def cached_suggestions(question: str, answer: str) -> list:
+    return generate_suggestions(question, answer)
+
+
+@st.cache_data(show_spinner=False)
+def cached_knowledge(question: str, answer: str) -> dict:
+    return expand_knowledge(question, answer)
+
+
+def run_post_answer_tasks(
+    question: str,
+    answer: str
+) -> tuple[list, list, dict]:
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        future_suggestions = executor.submit(
+            cached_suggestions, question, answer
+        )
+        future_actions = executor.submit(
+            suggest_next_actions, question, answer
+        )
+        future_knowledge = executor.submit(
+            cached_knowledge, question, answer
+        )
+
+        suggestions = []
+        actions = []
+        knowledge = {}
+
+        for future in as_completed([
+            future_suggestions,
+            future_actions,
+            future_knowledge
+        ]):
+            try:
+                result = future.result(timeout=30)
+                if future == future_suggestions:
+                    suggestions = result
+                elif future == future_actions:
+                    actions = result
+                elif future == future_knowledge:
+                    knowledge = result
+            except Exception:
+                pass
+
+    return suggestions, actions, knowledge
 
 
 def process_document(uploaded_file) -> bool:
@@ -97,30 +163,30 @@ def process_document(uploaded_file) -> bool:
         tracker = PerformanceTracker()
 
         tracker.start("reading")
-        with st.spinner("📖 Reading and understanding document..."):
+        with st.spinner("📖 Reading document..."):
             text = load_document(tmp_path)
             st.session_state.document_text = text
         tracker.end("reading")
 
         tracker.start("chunking")
-        with st.spinner("✂️ Intelligently chunking document..."):
+        with st.spinner("✂️ Chunking document..."):
             chunks = chunk_text(text)
         tracker.end("chunking")
 
         tracker.start("indexing")
-        with st.spinner("🔢 Creating embeddings and search indexes..."):
+        with st.spinner("🔢 Creating search indexes..."):
             create_vector_store(chunks)
             create_bm25_index(chunks)
         tracker.end("indexing")
 
-        tracker.start("intelligence")
-        with st.spinner("🧠 Building intelligence layer..."):
-            st.session_state.entities = extract_entities(text)
-            st.session_state.insights = generate_insights(text)
-            st.session_state.document_map = extract_document_map(text)
-        tracker.end("intelligence")
-
         st.session_state.document_processed = True
+        st.session_state.insights_loaded = False
+        st.session_state.entities_loaded = False
+        st.session_state.map_loaded = False
+        st.session_state.entities = {}
+        st.session_state.insights = {}
+        st.session_state.document_map = []
+
         st.session_state.memory = (
             st.session_state.file_memory_manager.get_memory(
                 uploaded_file.name
@@ -153,15 +219,24 @@ def handle_question(question: str, answer_mode: str):
         return
 
     if not st.session_state.awaiting_clarification:
-        clarification = needs_clarification(question)
-        if clarification["needs_clarification"]:
-            st.session_state.awaiting_clarification = True
-            st.session_state.pending_question = question
-            st.session_state.clarification_questions = (
-                clarification["questions"]
-            )
-            st.rerun()
-            return
+        ambiguous_words = [
+            "explain", "describe", "tell me about",
+            "what about", "how about", "discuss"
+        ]
+        is_ambiguous = any(
+            word in question.lower() for word in ambiguous_words
+        ) and len(question.split()) < 6
+
+        if is_ambiguous:
+            clarification = needs_clarification(question)
+            if clarification["needs_clarification"]:
+                st.session_state.awaiting_clarification = True
+                st.session_state.pending_question = question
+                st.session_state.clarification_questions = (
+                    clarification["questions"]
+                )
+                st.rerun()
+                return
 
     st.session_state.awaiting_clarification = False
     st.session_state.pending_question = None
@@ -192,80 +267,6 @@ def handle_question(question: str, answer_mode: str):
             show_chat_message("assistant", answer)
             show_evidence_panel(evidence)
 
-            suggestions = generate_suggestions(question, answer)
-            if suggestions:
-                st.markdown(
-                    "<p style='color:#8b949e;font-size:0.8rem;margin-top:12px;'>💡 Follow-up questions:</p>",
-                    unsafe_allow_html=True
-                )
-                cols = st.columns(len(suggestions))
-                for i, suggestion in enumerate(suggestions):
-                    with cols[i]:
-                        if st.button(
-                            suggestion,
-                            key=f"sug_{i}_{suggestion[:15]}"
-                        ):
-                            handle_question(suggestion, answer_mode)
-
-            actions = suggest_next_actions(question, answer)
-            if actions:
-                st.markdown(
-                    "<p style='color:#8b949e;font-size:0.8rem;'>⚡ Next actions:</p>",
-                    unsafe_allow_html=True
-                )
-                for action in actions:
-                    st.markdown(
-                        f"<span style='background:rgba(88,166,255,0.08);border:1px solid rgba(88,166,255,0.2);border-radius:20px;padding:4px 12px;font-size:0.8rem;color:#58a6ff;margin:3px;display:inline-block;'>{action}</span>",
-                        unsafe_allow_html=True
-                    )
-
-            knowledge = expand_knowledge(question, answer)
-            if knowledge:
-                with st.expander("🎓 Knowledge Expansion — Learn More"):
-                    if knowledge.get("YOUTUBE_SEARCHES"):
-                        st.markdown("**📺 Search on YouTube:**")
-                        for s in knowledge["YOUTUBE_SEARCHES"]:
-                            st.markdown(f"- {s}")
-                    if knowledge.get("RELATED_TOPICS"):
-                        st.markdown("**🔗 Related Topics:**")
-                        for t in knowledge["RELATED_TOPICS"]:
-                            st.markdown(f"- {t}")
-                    if knowledge.get("SIMILAR_RESOURCES"):
-                        st.markdown("**📚 Similar Resources:**")
-                        for r in knowledge["SIMILAR_RESOURCES"]:
-                            st.markdown(f"- {r}")
-                    if knowledge.get("LEARN_MORE"):
-                        st.markdown("**🎯 Learn More:**")
-                        for item in knowledge["LEARN_MORE"]:
-                            st.markdown(f"- {item}")
-
-            col_dl1, col_dl2 = st.columns(2)
-            with col_dl1:
-                txt_path = export_as_txt(
-                    answer,
-                    f"answer_{len(st.session_state.chat_history)}"
-                )
-                with open(txt_path, "rb") as f:
-                    st.download_button(
-                        "📥 Download as TXT",
-                        data=f,
-                        file_name="documind_answer.txt",
-                        key=f"dl_txt_{len(st.session_state.chat_history)}"
-                    )
-            with col_dl2:
-                docx_path = export_as_docx(
-                    answer,
-                    f"answer_{len(st.session_state.chat_history)}"
-                )
-                with open(docx_path, "rb") as f:
-                    st.download_button(
-                        "📥 Download as DOCX",
-                        data=f,
-                        file_name="documind_answer.docx",
-                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        key=f"dl_docx_{len(st.session_state.chat_history)}"
-                    )
-
             st.session_state.chat_history.append({
                 "role": "assistant",
                 "content": answer
@@ -274,6 +275,86 @@ def handle_question(question: str, answer_mode: str):
         except Exception as e:
             error_message = handle_error(e, context="workflow")
             show_error(error_message)
+            return
+
+    with st.spinner("⚡ Generating suggestions..."):
+        try:
+            suggestions, actions, knowledge = run_post_answer_tasks(
+                question, answer
+            )
+        except Exception:
+            suggestions, actions, knowledge = [], [], {}
+
+    if suggestions:
+        st.markdown(
+            "<p style='color:#8b949e;font-size:0.8rem;margin-top:12px;'>💡 Follow-up questions:</p>",
+            unsafe_allow_html=True
+        )
+        cols = st.columns(len(suggestions))
+        for i, suggestion in enumerate(suggestions):
+            with cols[i]:
+                if st.button(
+                    suggestion,
+                    key=f"sug_{i}_{suggestion[:15]}"
+                ):
+                    handle_question(suggestion, answer_mode)
+
+    if actions:
+        st.markdown(
+            "<p style='color:#8b949e;font-size:0.8rem;'>⚡ Next actions:</p>",
+            unsafe_allow_html=True
+        )
+        for action in actions:
+            st.markdown(
+                f"<span style='background:rgba(88,166,255,0.08);border:1px solid rgba(88,166,255,0.2);border-radius:20px;padding:4px 12px;font-size:0.8rem;color:#58a6ff;margin:3px;display:inline-block;'>{action}</span>",
+                unsafe_allow_html=True
+            )
+
+    if knowledge:
+        with st.expander("🎓 Knowledge Expansion"):
+            if knowledge.get("YOUTUBE_SEARCHES"):
+                st.markdown("**📺 Search on YouTube:**")
+                for s in knowledge["YOUTUBE_SEARCHES"]:
+                    st.markdown(f"- {s}")
+            if knowledge.get("RELATED_TOPICS"):
+                st.markdown("**🔗 Related Topics:**")
+                for t in knowledge["RELATED_TOPICS"]:
+                    st.markdown(f"- {t}")
+            if knowledge.get("SIMILAR_RESOURCES"):
+                st.markdown("**📚 Similar Resources:**")
+                for r in knowledge["SIMILAR_RESOURCES"]:
+                    st.markdown(f"- {r}")
+            if knowledge.get("LEARN_MORE"):
+                st.markdown("**🎯 Learn More:**")
+                for item in knowledge["LEARN_MORE"]:
+                    st.markdown(f"- {item}")
+
+    col_dl1, col_dl2 = st.columns(2)
+    with col_dl1:
+        txt_path = export_as_txt(
+            answer,
+            f"answer_{len(st.session_state.chat_history)}"
+        )
+        with open(txt_path, "rb") as f:
+            st.download_button(
+                "📥 Download as TXT",
+                data=f,
+                file_name="documind_answer.txt",
+                key=f"dl_txt_{len(st.session_state.chat_history)}"
+            )
+    with col_dl2:
+        docx_path = export_as_docx(
+            answer,
+            f"answer_{len(st.session_state.chat_history)}"
+        )
+        with open(docx_path, "rb") as f:
+            st.download_button(
+                "📥 Download as DOCX",
+                data=f,
+                file_name="documind_answer.docx",
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                key=f"dl_docx_{len(st.session_state.chat_history)}"
+            )
 
 
 def main():
@@ -370,7 +451,6 @@ def main():
                             st.rerun()
 
             st.markdown("---")
-
             if st.button("🗑️ Clear Chat", use_container_width=True):
                 st.session_state.memory.clear()
                 st.session_state.chat_history = []
@@ -386,6 +466,9 @@ def main():
                 st.session_state.entities = {}
                 st.session_state.insights = {}
                 st.session_state.document_map = []
+                st.session_state.insights_loaded = False
+                st.session_state.entities_loaded = False
+                st.session_state.map_loaded = False
                 st.rerun()
 
     if not st.session_state.document_processed:
@@ -476,64 +559,91 @@ def main():
                         else:
                             show_warning("Could not transcribe. Type instead.")
             except Exception:
-                st.button("🎤", help="Voice unavailable on this device")
+                st.button("🎤", help="Voice unavailable")
 
         if question:
             handle_question(question, st.session_state.answer_mode)
 
     with tab2:
         st.markdown("### 🔍 Living Insight Layer")
-        insights = st.session_state.insights
-        if insights:
-            icon_map = {
-                "SUMMARY": ("📄", "Document Summary"),
-                "KEY_FINDINGS": ("🎯", "Key Findings"),
-                "ACTION_ITEMS": ("✅", "Action Items"),
-                "RISKS": ("⚠️", "Risks and Concerns"),
-                "DECISIONS": ("💡", "Key Decisions"),
-                "NEXT_STEPS": ("🚀", "Recommended Next Steps")
-            }
-            for key, (icon, title) in icon_map.items():
-                if insights.get(key):
-                    show_insight_card(title, insights[key], icon)
+        if not st.session_state.insights_loaded:
+            if st.button("🧠 Generate Insights", use_container_width=True):
+                with st.spinner("Generating insights..."):
+                    st.session_state.insights = cached_generate_insights(
+                        st.session_state.document_text[:4000]
+                    )
+                    st.session_state.insights_loaded = True
+                    st.rerun()
         else:
-            st.info("Process a document to see insights here.")
+            insights = st.session_state.insights
+            if insights:
+                icon_map = {
+                    "SUMMARY": ("📄", "Document Summary"),
+                    "KEY_FINDINGS": ("🎯", "Key Findings"),
+                    "ACTION_ITEMS": ("✅", "Action Items"),
+                    "RISKS": ("⚠️", "Risks and Concerns"),
+                    "DECISIONS": ("💡", "Key Decisions"),
+                    "NEXT_STEPS": ("🚀", "Recommended Next Steps")
+                }
+                for key, (icon, title) in icon_map.items():
+                    if insights.get(key):
+                        show_insight_card(title, insights[key], icon)
 
     with tab3:
         st.markdown("### 📊 Entity Extraction Dashboard")
-        entities = st.session_state.entities
-        if entities:
-            for entity_type, values in entities.items():
-                if values:
-                    st.markdown(f"**{entity_type}:**")
-                    tags_html = "".join([
-                        f"<span style='display:inline-block;background:rgba(210,153,34,0.1);border:1px solid rgba(210,153,34,0.3);border-radius:6px;padding:3px 10px;margin:3px;font-size:0.8rem;color:#d29922;'>{v}</span>"
-                        for v in values
-                    ])
-                    st.markdown(tags_html, unsafe_allow_html=True)
-                    st.markdown("")
+        if not st.session_state.entities_loaded:
+            if st.button(
+                "🔍 Extract Entities",
+                use_container_width=True
+            ):
+                with st.spinner("Extracting entities..."):
+                    st.session_state.entities = cached_extract_entities(
+                        st.session_state.document_text[:3000]
+                    )
+                    st.session_state.entities_loaded = True
+                    st.rerun()
         else:
-            st.info("Process a document to see entities here.")
+            entities = st.session_state.entities
+            if entities:
+                for entity_type, values in entities.items():
+                    if values:
+                        st.markdown(f"**{entity_type}:**")
+                        tags_html = "".join([
+                            f"<span style='display:inline-block;background:rgba(210,153,34,0.1);border:1px solid rgba(210,153,34,0.3);border-radius:6px;padding:3px 10px;margin:3px;font-size:0.8rem;color:#d29922;'>{v}</span>"
+                            for v in values
+                        ])
+                        st.markdown(tags_html, unsafe_allow_html=True)
+                        st.markdown("")
 
     with tab4:
         st.markdown("### 🗺️ Document Map")
-        doc_map = st.session_state.document_map
-        if doc_map:
-            for section in doc_map:
-                with st.expander(f"📍 {section['title']}"):
-                    st.markdown(
-                        section.get("description", "No description available.")
+        if not st.session_state.map_loaded:
+            if st.button(
+                "🗺️ Generate Document Map",
+                use_container_width=True
+            ):
+                with st.spinner("Building document map..."):
+                    st.session_state.document_map = cached_document_map(
+                        st.session_state.document_text[:5000]
                     )
-                    if st.button(
-                        "Ask about this section",
-                        key=f"map_{section['title'][:20]}"
-                    ):
-                        handle_question(
-                            f"Tell me about: {section['title']}",
-                            st.session_state.answer_mode
-                        )
+                    st.session_state.map_loaded = True
+                    st.rerun()
         else:
-            st.info("Process a document to see the document map here.")
+            doc_map = st.session_state.document_map
+            if doc_map:
+                for section in doc_map:
+                    with st.expander(f"📍 {section['title']}"):
+                        st.markdown(
+                            section.get("description", "")
+                        )
+                        if st.button(
+                            "Ask about this section",
+                            key=f"map_{section['title'][:20]}"
+                        ):
+                            handle_question(
+                                f"Tell me about: {section['title']}",
+                                st.session_state.answer_mode
+                            )
 
     with tab5:
         st.markdown("### ✂️ Ask by Selection")
@@ -572,10 +682,12 @@ def main():
                     st.markdown("### Result:")
                     st.markdown(selection_result)
 
-                    txt_path = export_as_txt(selection_result, "selection")
+                    txt_path = export_as_txt(
+                        selection_result, "selection"
+                    )
                     with open(txt_path, "rb") as f:
                         st.download_button(
-                            "📥 Download Result as TXT",
+                            "📥 Download Result",
                             data=f,
                             file_name="selection_analysis.txt"
                         )
