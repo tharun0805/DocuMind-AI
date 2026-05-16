@@ -418,3 +418,56 @@ def show_warning(message: str):
 
 def show_thinking():
     return st.spinner("🧠 DocuMind is analysing your question...")
+
+
+def show_answer_mode_selector() -> str:
+    st.markdown(
+        "<p class='sidebar-title'>Answer Mode</p>",
+        unsafe_allow_html=True
+    )
+    mode = st.selectbox(
+        "Select mode",
+        options=[
+            "detailed",
+            "quick",
+            "bullet",
+            "beginner",
+            "executive",
+            "table"
+        ],
+        format_func=lambda x: {
+            "detailed": "📝 Detailed Explanation",
+            "quick": "⚡ Quick Answer",
+            "bullet": "• Bullet Points",
+            "beginner": "🎓 Beginner Friendly",
+            "executive": "💼 Executive Summary",
+            "table": "📊 Table Format"
+        }[x],
+        label_visibility="collapsed"
+    )
+    return mode
+
+
+def show_evidence_panel(evidence: list):
+    if not evidence:
+        return
+    with st.expander("📎 View Evidence — Sources Used"):
+        for i, chunk in enumerate(evidence, 1):
+            st.markdown(
+                f"""
+                <div style='
+                    background:rgba(88,166,255,0.05);
+                    border-left:3px solid #58a6ff;
+                    border-radius:0 8px 8px 0;
+                    padding:12px 16px;
+                    margin-bottom:12px;
+                    font-size:0.85rem;
+                    color:#8b949e;
+                    line-height:1.6;
+                '>
+                <strong style='color:#58a6ff;'>
+                Source {i}:</strong><br>{chunk}
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
