@@ -1,41 +1,32 @@
-import time
-from langchain_core.prompts import PromptTemplate
-from utils.llm_provider import get_shared_llm
 from loguru import logger
 
 
 def classify_intent(question: str) -> str:
     logger.info(f"Classifying intent for: {question}")
 
-    prompt = PromptTemplate(
-        input_variables=["question"],
-        template="""
-        Classify this question into exactly one category:
-        - factual: specific information from document
-        - computational: requires calculation or data analysis
-        - summary: asking to summarize or overview
+    question_lower = question.lower()
 
-        Question: {question}
+    computational_keywords = [
+        "calculate", "compute", "sum", "total", "average", "count",
+        "maximum", "minimum", "how many", "percentage", "ratio",
+        "how much", "add up", "subtract", "multiply", "divide"
+    ]
 
-        Reply with only one word: factual, computational, or summary
-        """
-    )
+    summary_keywords = [
+        "summarize", "summary", "overview", "brief", "outline",
+        "main points", "key points", "what is this about", "describe",
+        "what does this document"
+    ]
 
-    for attempt in range(3):
-        try:
-            llm = get_shared_llm(temperature=0)
-            chain = prompt | llm
-            result = chain.invoke({"question": question})
-            intent = result.content.strip().lower()
-            if intent not in ["factual", "computational", "summary"]:
-                intent = "factual"
-            logger.info(f"Intent: {intent}")
-            return intent
-        except Exception as e:
-            if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
-                time.sleep(60 * (attempt + 1))
-            else:
-                logger.error(f"Intent error: {e}")
-                return "factual"
+    for keyword in computational_keywords:
+        if keyword in question_lower:
+            logger.info("Intent: computational")
+            return "computational"
 
+    for keyword in summary_keywords:
+        if keyword in question_lower:
+            logger.info("Intent: summary")
+            return "summary"
+
+    logger.info("Intent: factual")
     return "factual"
