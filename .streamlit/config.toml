@@ -7,6 +7,9 @@ maxUploadSize = 2000
 [browser]
 gatherUsageStats = false
 
+[runner]
+fastReruns = true
+
 [theme]
 base = "dark"
 backgroundColor = "#0d1117"
