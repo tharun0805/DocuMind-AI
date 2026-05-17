@@ -41,40 +41,27 @@ def load_core_dependencies():
     }
 
 
-def get_agent(agent_name: str):
-    if agent_name == "suggestions":
-        from agents.suggestion_agent import generate_suggestions
-        return generate_suggestions
-    elif agent_name == "actions":
-        from agents.action_suggestions_agent import suggest_next_actions
-        return suggest_next_actions
-    elif agent_name == "knowledge":
-        from agents.knowledge_agent import expand_knowledge
-        return expand_knowledge
-    elif agent_name == "entity":
-        from agents.entity_agent import extract_entities
-        return extract_entities
-    elif agent_name == "insight":
-        from agents.insight_agent import generate_insights
-        return generate_insights
-    elif agent_name == "document_map":
-        from agents.document_map_agent import extract_document_map
-        return extract_document_map
-    elif agent_name == "selection":
-        from agents.selection_agent import ask_about_selection
-        return ask_about_selection
-    elif agent_name == "action":
-        from agents.document_action_agent import perform_document_action
-        return perform_document_action
-    elif agent_name == "multi_doc":
-        from agents.multi_document_agent import query_multiple_documents
-        return query_multiple_documents
-    elif agent_name == "voice":
-        from agents.voice_agent import transcribe_audio_file
-        return transcribe_audio_file
+def get_agent(name: str):
+    agents = {
+        "suggestions": ("agents.suggestion_agent", "generate_suggestions"),
+        "knowledge": ("agents.knowledge_agent", "expand_knowledge"),
+        "entity": ("agents.entity_agent", "extract_entities"),
+        "insight": ("agents.insight_agent", "generate_insights"),
+        "document_map": ("agents.document_map_agent", "extract_document_map"),
+        "selection": ("agents.selection_agent", "ask_about_selection"),
+        "action": ("agents.document_action_agent", "perform_document_action"),
+        "multi_doc": ("agents.multi_document_agent", "query_multiple_documents"),
+        "voice": ("agents.voice_agent", "transcribe_audio_file"),
+    }
+    if name in agents:
+        module_path, func_name = agents[name]
+        import importlib
+        module = importlib.import_module(module_path)
+        return getattr(module, func_name)
+    return None
 
 
-def get_export_tools():
+def get_export():
     from tools.file_export_tool import export_as_txt, export_as_docx
     return export_as_txt, export_as_docx
 
@@ -111,169 +98,558 @@ def initialize_session(deps: dict):
 def apply_css():
     st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-    * { font-family: 'Inter', sans-serif; }
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+    * {
+        font-family: 'Inter', sans-serif;
+    }
+
     .stApp {
-        background: linear-gradient(135deg, #0a0a0f 0%, #0d1117 50%, #0a0e1a 100%);
+        background: #050508;
+        background-image:
+            radial-gradient(ellipse at 20% 50%, rgba(88,166,255,0.04) 0%, transparent 50%),
+            radial-gradient(ellipse at 80% 20%, rgba(63,185,80,0.04) 0%, transparent 50%),
+            radial-gradient(ellipse at 50% 80%, rgba(139,92,246,0.04) 0%, transparent 50%);
         color: #e6edf3;
+        min-height: 100vh;
     }
+
     section[data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #0d1117 0%, #161b22 100%);
-        border-right: 1px solid #21262d;
+        background: rgba(13,17,23,0.98) !important;
+        border-right: 1px solid rgba(88,166,255,0.08) !important;
+        backdrop-filter: blur(20px);
     }
-    section[data-testid="stSidebar"] * { color: #e6edf3 !important; }
-    .main-header {
+
+    section[data-testid="stSidebar"] * {
+        color: #e6edf3 !important;
+    }
+
+    .hero-section {
         text-align: center;
-        padding: 30px 20px;
-        background: linear-gradient(135deg, rgba(88,166,255,0.05), rgba(63,185,80,0.05));
-        border-radius: 16px;
-        border: 1px solid rgba(88,166,255,0.1);
-        margin-bottom: 24px;
+        padding: 48px 24px 32px;
+        position: relative;
+        overflow: hidden;
     }
-    .main-header h1 {
-        font-size: 2.8rem;
-        font-weight: 700;
-        background: linear-gradient(135deg, #58a6ff 0%, #3fb950 100%);
+
+    .hero-section::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background:
+            radial-gradient(ellipse at 50% 0%, rgba(88,166,255,0.12) 0%, transparent 60%);
+        pointer-events: none;
+    }
+
+    .hero-badge {
+        display: inline-block;
+        background: rgba(88,166,255,0.1);
+        border: 1px solid rgba(88,166,255,0.2);
+        border-radius: 100px;
+        padding: 6px 16px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #58a6ff;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        margin-bottom: 20px;
+    }
+
+    .hero-title {
+        font-size: 3.5rem;
+        font-weight: 800;
+        line-height: 1.1;
+        margin-bottom: 16px;
+        background: linear-gradient(135deg, #ffffff 0%, #58a6ff 50%, #3fb950 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         background-clip: text;
     }
-    .main-header p { color: #8b949e; font-size: 1rem; }
-    .sidebar-title {
-        font-size: 0.72rem;
-        font-weight: 600;
-        color: #8b949e !important;
+
+    .hero-subtitle {
+        font-size: 1.1rem;
+        color: #8b949e;
+        font-weight: 400;
+        max-width: 600px;
+        margin: 0 auto 32px;
+        line-height: 1.6;
+    }
+
+    .stats-row {
+        display: flex;
+        justify-content: center;
+        gap: 40px;
+        margin-top: 24px;
+        flex-wrap: wrap;
+    }
+
+    .stat-item {
+        text-align: center;
+    }
+
+    .stat-number {
+        font-size: 1.8rem;
+        font-weight: 700;
+        color: #58a6ff;
+        display: block;
+    }
+
+    .stat-label {
+        font-size: 0.75rem;
+        color: #8b949e;
         text-transform: uppercase;
-        letter-spacing: 1.5px;
+        letter-spacing: 1px;
+    }
+
+    .feature-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+        margin-top: 40px;
+        padding: 0 20px;
+    }
+
+    .feature-card {
+        background: rgba(22,27,34,0.6);
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 16px;
+        padding: 24px;
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .feature-card::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(88,166,255,0.3), transparent);
+    }
+
+    .feature-card:hover {
+        border-color: rgba(88,166,255,0.2);
+        background: rgba(88,166,255,0.05);
+        transform: translateY(-3px);
+        box-shadow: 0 8px 30px rgba(88,166,255,0.1);
+    }
+
+    .feature-icon {
+        font-size: 2rem;
+        margin-bottom: 12px;
+        display: block;
+    }
+
+    .feature-title {
+        color: #e6edf3;
+        font-size: 0.95rem;
+        font-weight: 600;
+        margin-bottom: 6px;
+    }
+
+    .feature-desc {
+        color: #8b949e;
+        font-size: 0.8rem;
+        line-height: 1.5;
+    }
+
+    .sidebar-section {
+        margin-bottom: 20px;
+    }
+
+    .sidebar-label {
+        font-size: 0.68rem;
+        font-weight: 700;
+        color: rgba(139,148,158,0.8) !important;
+        text-transform: uppercase;
+        letter-spacing: 2px;
         margin-bottom: 10px;
+        display: block;
     }
-    .stButton > button {
-        background: linear-gradient(135deg, #1f6feb, #388bfd) !important;
-        color: white !important;
-        border: none !important;
-        border-radius: 8px !important;
-        font-weight: 600 !important;
-        transition: all 0.2s ease !important;
-    }
-    .stButton > button:hover {
-        transform: translateY(-1px) !important;
-        box-shadow: 0 4px 15px rgba(88,166,255,0.3) !important;
-    }
-    .file-info-card {
+
+    .file-pill {
         background: rgba(63,185,80,0.08);
         border: 1px solid rgba(63,185,80,0.2);
         border-radius: 10px;
         padding: 10px 14px;
         margin: 8px 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
     }
-    .file-info-card p {
+
+    .file-pill-name {
         color: #3fb950;
         font-size: 0.83rem;
         font-weight: 500;
-        margin: 0;
     }
-    .stats-card {
-        background: rgba(88,166,255,0.05);
-        border: 1px solid rgba(88,166,255,0.1);
+
+    .file-pill-size {
+        color: #8b949e;
+        font-size: 0.75rem;
+        margin-left: auto;
+    }
+
+    .msg-count {
+        background: rgba(88,166,255,0.06);
+        border: 1px solid rgba(88,166,255,0.12);
         border-radius: 10px;
-        padding: 10px;
+        padding: 12px;
         text-align: center;
-        margin: 6px 0;
     }
-    .stats-card h3 { color: #58a6ff; font-size: 1.4rem; font-weight: 700; margin: 0; }
-    .stats-card p { color: #8b949e; font-size: 0.72rem; margin: 0; text-transform: uppercase; }
-    .insight-card {
-        background: rgba(63,185,80,0.05);
-        border: 1px solid rgba(63,185,80,0.15);
-        border-radius: 10px;
-        padding: 14px;
-        margin-bottom: 10px;
+
+    .msg-number {
+        font-size: 1.6rem;
+        font-weight: 700;
+        color: #58a6ff;
+        display: block;
     }
-    .insight-card h4 { color: #3fb950; font-size: 0.88rem; font-weight: 600; margin-bottom: 6px; }
-    .feature-grid {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 14px;
-        margin-top: 24px;
+
+    .msg-label {
+        font-size: 0.68rem;
+        color: #8b949e;
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
     }
-    .feature-card {
-        background: rgba(22,27,34,0.8);
-        border: 1px solid #21262d;
+
+    .stButton > button {
+        background: linear-gradient(135deg, #1f6feb 0%, #388bfd 100%) !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 10px !important;
+        font-weight: 600 !important;
+        font-size: 0.875rem !important;
+        letter-spacing: 0.2px !important;
+        transition: all 0.2s ease !important;
+        box-shadow: 0 2px 8px rgba(31,111,235,0.3) !important;
+    }
+
+    .stButton > button:hover {
+        background: linear-gradient(135deg, #388bfd 0%, #58a6ff 100%) !important;
+        transform: translateY(-1px) !important;
+        box-shadow: 0 6px 20px rgba(88,166,255,0.35) !important;
+    }
+
+    .stButton > button:active {
+        transform: translateY(0) !important;
+    }
+
+    .action-btn > button {
+        background: rgba(88,166,255,0.08) !important;
+        border: 1px solid rgba(88,166,255,0.15) !important;
+        color: #58a6ff !important;
+        box-shadow: none !important;
+    }
+
+    .action-btn > button:hover {
+        background: rgba(88,166,255,0.15) !important;
+        border-color: rgba(88,166,255,0.3) !important;
+        transform: translateY(-1px) !important;
+    }
+
+    div[data-testid="stChatMessage"] {
+        background: transparent !important;
+        padding: 4px 0 !important;
+    }
+
+    .stChatInputContainer {
+        background: rgba(22,27,34,0.8) !important;
+        border: 1px solid rgba(255,255,255,0.08) !important;
+        border-radius: 14px !important;
+        backdrop-filter: blur(10px) !important;
+    }
+
+    .stChatInputContainer:focus-within {
+        border-color: rgba(88,166,255,0.4) !important;
+        box-shadow: 0 0 0 3px rgba(88,166,255,0.08) !important;
+    }
+
+    .evidence-container {
+        background: rgba(88,166,255,0.03);
+        border: 1px solid rgba(88,166,255,0.1);
         border-radius: 12px;
-        padding: 18px;
+        padding: 4px;
+        margin-top: 8px;
+    }
+
+    .evidence-chunk {
+        background: rgba(13,17,23,0.6);
+        border-left: 3px solid #58a6ff;
+        border-radius: 0 8px 8px 0;
+        padding: 10px 14px;
+        margin: 8px;
+        font-size: 0.82rem;
+        color: #8b949e;
+        line-height: 1.5;
+    }
+
+    .insight-card {
+        background: rgba(63,185,80,0.04);
+        border: 1px solid rgba(63,185,80,0.12);
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 12px;
         transition: all 0.2s ease;
     }
-    .feature-card:hover {
-        border-color: #58a6ff;
-        transform: translateY(-2px);
+
+    .insight-card:hover {
+        border-color: rgba(63,185,80,0.25);
+        background: rgba(63,185,80,0.07);
     }
-    .feature-card .icon { font-size: 1.6rem; margin-bottom: 8px; }
-    .feature-card h4 { color: #e6edf3; font-size: 0.9rem; font-weight: 600; margin-bottom: 4px; }
-    .feature-card p { color: #8b949e; font-size: 0.78rem; margin: 0; line-height: 1.4; }
-    ::-webkit-scrollbar { width: 5px; }
-    ::-webkit-scrollbar-track { background: #0d1117; }
-    ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
-    ::-webkit-scrollbar-thumb:hover { background: #58a6ff; }
-    hr { border-color: #21262d !important; }
+
+    .insight-icon-title {
+        color: #3fb950;
+        font-size: 0.88rem;
+        font-weight: 600;
+        margin-bottom: 8px;
+    }
+
+    .insight-content {
+        color: #8b949e;
+        font-size: 0.83rem;
+        line-height: 1.6;
+    }
+
+    .entity-tag {
+        display: inline-block;
+        background: rgba(210,153,34,0.08);
+        border: 1px solid rgba(210,153,34,0.2);
+        border-radius: 6px;
+        padding: 3px 10px;
+        margin: 3px;
+        font-size: 0.78rem;
+        color: #d29922;
+        transition: all 0.2s ease;
+    }
+
+    .entity-tag:hover {
+        background: rgba(210,153,34,0.15);
+    }
+
+    .resource-card {
+        background: rgba(22,27,34,0.6);
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 12px;
+        padding: 14px 16px;
+        margin-bottom: 10px;
+        transition: all 0.2s ease;
+        cursor: pointer;
+    }
+
+    .resource-card:hover {
+        border-color: rgba(88,166,255,0.2);
+        background: rgba(88,166,255,0.04);
+        transform: translateX(3px);
+    }
+
+    .resource-card a {
+        color: #58a6ff !important;
+        text-decoration: none !important;
+        font-weight: 500;
+        font-size: 0.88rem;
+    }
+
+    .resource-card a:hover {
+        text-decoration: underline !important;
+    }
+
+    .resource-meta {
+        color: #8b949e;
+        font-size: 0.75rem;
+        margin-top: 4px;
+    }
+
+    .youtube-card {
+        background: rgba(255,0,0,0.05);
+        border: 1px solid rgba(255,0,0,0.15);
+        border-radius: 12px;
+        padding: 12px 16px;
+        margin-bottom: 10px;
+        transition: all 0.2s ease;
+    }
+
+    .youtube-card:hover {
+        border-color: rgba(255,0,0,0.3);
+        background: rgba(255,0,0,0.08);
+    }
+
+    .youtube-card a {
+        color: #ff6b6b !important;
+        text-decoration: none !important;
+        font-weight: 500;
+        font-size: 0.88rem;
+    }
+
+    .processing-step {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 0;
+        font-size: 0.85rem;
+        color: #8b949e;
+    }
+
+    .processing-step.active {
+        color: #58a6ff;
+    }
+
+    .processing-step.done {
+        color: #3fb950;
+    }
+
+    .tab-content {
+        padding: 20px 0;
+    }
+
+    div[data-testid="stTabs"] button {
+        font-weight: 500 !important;
+        font-size: 0.88rem !important;
+    }
+
+    div[data-testid="stExpander"] {
+        background: rgba(22,27,34,0.4) !important;
+        border: 1px solid rgba(255,255,255,0.06) !important;
+        border-radius: 12px !important;
+    }
+
+    .stSelectbox > div > div {
+        background: rgba(22,27,34,0.8) !important;
+        border: 1px solid rgba(255,255,255,0.08) !important;
+        border-radius: 10px !important;
+    }
+
+    .stFileUploader {
+        border: 2px dashed rgba(88,166,255,0.2) !important;
+        border-radius: 12px !important;
+        background: rgba(88,166,255,0.02) !important;
+        transition: all 0.2s ease !important;
+    }
+
+    .stFileUploader:hover {
+        border-color: rgba(88,166,255,0.4) !important;
+        background: rgba(88,166,255,0.05) !important;
+    }
+
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(88,166,255,0.2); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(88,166,255,0.4); }
+
+    hr { border-color: rgba(255,255,255,0.06) !important; }
+
+    .stSuccess {
+        background: rgba(63,185,80,0.08) !important;
+        border: 1px solid rgba(63,185,80,0.2) !important;
+        border-radius: 10px !important;
+    }
+
+    .stError {
+        background: rgba(248,81,73,0.08) !important;
+        border: 1px solid rgba(248,81,73,0.2) !important;
+        border-radius: 10px !important;
+    }
+
+    .stWarning {
+        background: rgba(210,153,34,0.08) !important;
+        border: 1px solid rgba(210,153,34,0.2) !important;
+        border-radius: 10px !important;
+    }
+
+    .stInfo {
+        background: rgba(88,166,255,0.06) !important;
+        border: 1px solid rgba(88,166,255,0.15) !important;
+        border-radius: 10px !important;
+    }
+
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+
+    .loading-dot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #58a6ff;
+        animation: pulse 1.5s ease-in-out infinite;
+        margin: 0 2px;
+    }
+
+    .loading-dot:nth-child(2) { animation-delay: 0.2s; }
+    .loading-dot:nth-child(3) { animation-delay: 0.4s; }
     </style>
     """, unsafe_allow_html=True)
 
 
-def show_header():
+def show_hero():
     st.markdown("""
-    <div class='main-header'>
-        <h1>🧠 DocuMind AI</h1>
-        <p>Intelligent Document Intelligence Platform — Powered by Gemini and LangGraph</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-
-def show_welcome():
-    st.markdown("""
-    <div style='text-align:center;margin-top:60px;padding:40px;'>
-        <h2 style='color:#e6edf3;font-size:1.8rem;font-weight:600;'>
-            Upload a document to get started
-        </h2>
-        <p style='color:#8b949e;margin-bottom:30px;'>
-            Ask questions, get insights, and analyse your documents using AI
-        </p>
-        <div class='feature-grid'>
-            <div class='feature-card'>
-                <div class='icon'>📄</div>
-                <h4>Multi-Format</h4>
-                <p>PDF, Word, Excel, PowerPoint, CSV, TXT</p>
+    <div class='hero-section'>
+        <div class='hero-badge'>✦ AI-Powered Document Intelligence</div>
+        <div class='hero-title'>DocuMind AI</div>
+        <div class='hero-subtitle'>
+            Upload any document and unlock instant intelligence — powered by
+            Google Gemini, LangGraph agents, and hybrid search technology
+        </div>
+        <div class='stats-row'>
+            <div class='stat-item'>
+                <span class='stat-number'>6+</span>
+                <span class='stat-label'>File Formats</span>
             </div>
-            <div class='feature-card'>
-                <div class='icon'>🔍</div>
-                <h4>Hybrid Search</h4>
-                <p>FAISS semantic + BM25 keyword search</p>
+            <div class='stat-item'>
+                <span class='stat-number'>5</span>
+                <span class='stat-label'>AI Agents</span>
             </div>
-            <div class='feature-card'>
-                <div class='icon'>🤖</div>
-                <h4>Multi-Agent AI</h4>
-                <p>Intent, Planner, Retriever, QA agents</p>
+            <div class='stat-item'>
+                <span class='stat-number'>20+</span>
+                <span class='stat-label'>Features</span>
             </div>
-            <div class='feature-card'>
-                <div class='icon'>💬</div>
-                <h4>Memory</h4>
-                <p>Full conversation memory per document</p>
-            </div>
-            <div class='feature-card'>
-                <div class='icon'>📊</div>
-                <h4>Data Analysis</h4>
-                <p>Compute answers from Excel and CSV</p>
-            </div>
-            <div class='feature-card'>
-                <div class='icon'>🔒</div>
-                <h4>100% Private</h4>
-                <p>Documents never leave your machine</p>
+            <div class='stat-item'>
+                <span class='stat-number'>100%</span>
+                <span class='stat-label'>Private</span>
             </div>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
 
-def show_chat_message(role: str, content: str):
+def show_welcome_features():
+    st.markdown("""
+    <div class='feature-grid'>
+        <div class='feature-card'>
+            <span class='feature-icon'>🔍</span>
+            <div class='feature-title'>Hybrid Search</div>
+            <div class='feature-desc'>FAISS semantic + BM25 keyword with Reciprocal Rank Fusion</div>
+        </div>
+        <div class='feature-card'>
+            <span class='feature-icon'>🤖</span>
+            <div class='feature-title'>Multi-Agent AI</div>
+            <div class='feature-desc'>Intent, Planner, Retriever, QA agents orchestrated by LangGraph</div>
+        </div>
+        <div class='feature-card'>
+            <span class='feature-icon'>📊</span>
+            <div class='feature-title'>Data Computation</div>
+            <div class='feature-desc'>Actual calculations on Excel and CSV with Pandas DataFrame agent</div>
+        </div>
+        <div class='feature-card'>
+            <span class='feature-icon'>💬</span>
+            <div class='feature-title'>Session Memory</div>
+            <div class='feature-desc'>Per-document conversation memory with full multi-turn support</div>
+        </div>
+        <div class='feature-card'>
+            <span class='feature-icon'>🌐</span>
+            <div class='feature-title'>Knowledge Expansion</div>
+            <div class='feature-desc'>Real YouTube links and web resources related to your document</div>
+        </div>
+        <div class='feature-card'>
+            <span class='feature-icon'>🔒</span>
+            <div class='feature-title'>100% Private</div>
+            <div class='feature-desc'>Documents never leave your machine. Zero data exposure.</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+def show_message(role: str, content: str):
     if role == "human":
         with st.chat_message("user", avatar="👤"):
             st.markdown(content)
@@ -285,40 +661,98 @@ def show_chat_message(role: str, content: str):
 def show_evidence(evidence: list):
     if not evidence:
         return
-    with st.expander("📎 View Evidence Sources"):
+    with st.expander("📎 Evidence Sources Used"):
+        st.markdown("<div class='evidence-container'>", unsafe_allow_html=True)
         for i, chunk in enumerate(evidence, 1):
             st.markdown(
-                f"""<div style='background:rgba(88,166,255,0.05);
-                border-left:3px solid #58a6ff;border-radius:0 8px 8px 0;
-                padding:10px 14px;margin-bottom:10px;font-size:0.83rem;
-                color:#8b949e;line-height:1.5;'>
-                <strong style='color:#58a6ff;'>Source {i}:</strong>
-                <br>{chunk}</div>""",
+                f"<div class='evidence-chunk'><strong style='color:#58a6ff;'>Source {i}</strong><br>{chunk}</div>",
                 unsafe_allow_html=True
             )
+        st.markdown("</div>", unsafe_allow_html=True)
 
 
-def show_file_info(name: str, size: int):
-    kb = size / 1024
-    st.markdown(
-        f"<div class='file-info-card'><p>📄 <strong>{name}</strong> — {kb:.1f} KB</p></div>",
-        unsafe_allow_html=True
-    )
+def show_resources(question: str, answer: str):
+    fn = get_agent("knowledge")
+    if not fn:
+        return
 
+    with st.spinner("🌐 Finding related resources..."):
+        knowledge = fn(question, answer)
 
-def show_stats(count: int):
-    st.markdown(
-        f"<div class='stats-card'><h3>{count}</h3><p>Messages</p></div>",
-        unsafe_allow_html=True
-    )
+    if not knowledge:
+        return
 
+    st.markdown("---")
+    st.markdown("### 🌐 Related External Resources")
 
-def show_insight_card(title: str, content: str, icon: str):
-    st.markdown(
-        f"<div class='insight-card'><h4>{icon} {title}</h4>"
-        f"<p style='color:#8b949e;font-size:0.83rem;line-height:1.5;'>{content}</p></div>",
-        unsafe_allow_html=True
-    )
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if knowledge.get("YOUTUBE_SEARCHES"):
+            st.markdown("#### 📺 YouTube — Search These")
+            for search in knowledge["YOUTUBE_SEARCHES"]:
+                query = search.strip().replace(" ", "+")
+                url = f"https://www.youtube.com/results?search_query={query}"
+                st.markdown(
+                    f"""
+                    <div class='youtube-card'>
+                        <a href='{url}' target='_blank'>▶ {search}</a>
+                        <div class='resource-meta'>Click to search on YouTube →</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+        if knowledge.get("RELATED_TOPICS"):
+            st.markdown("#### 🔗 Related Topics")
+            for topic in knowledge["RELATED_TOPICS"]:
+                query = topic.strip().replace(" ", "+")
+                wiki_url = f"https://en.wikipedia.org/wiki/Special:Search?search={query}"
+                google_url = f"https://www.google.com/search?q={query}"
+                st.markdown(
+                    f"""
+                    <div class='resource-card'>
+                        <a href='{wiki_url}' target='_blank'>📖 {topic}</a>
+                        <div class='resource-meta'>
+                            <a href='{wiki_url}' target='_blank' style='color:#8b949e;'>Wikipedia</a>
+                            &nbsp;·&nbsp;
+                            <a href='{google_url}' target='_blank' style='color:#8b949e;'>Google</a>
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+    with col2:
+        if knowledge.get("SIMILAR_RESOURCES"):
+            st.markdown("#### 📚 Similar Resources")
+            for resource in knowledge["SIMILAR_RESOURCES"]:
+                query = resource.strip().replace(" ", "+")
+                scholar_url = f"https://scholar.google.com/scholar?q={query}"
+                st.markdown(
+                    f"""
+                    <div class='resource-card'>
+                        <a href='{scholar_url}' target='_blank'>🎓 {resource}</a>
+                        <div class='resource-meta'>Search on Google Scholar →</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+        if knowledge.get("LEARN_MORE"):
+            st.markdown("#### 🎯 Recommended Learning")
+            for item in knowledge["LEARN_MORE"]:
+                query = item.strip().replace(" ", "+")
+                url = f"https://www.google.com/search?q={query}"
+                st.markdown(
+                    f"""
+                    <div class='resource-card'>
+                        <a href='{url}' target='_blank'>💡 {item}</a>
+                        <div class='resource-meta'>Search online →</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
 
 
 def process_document(uploaded_file, deps: dict) -> bool:
@@ -337,24 +771,26 @@ def process_document(uploaded_file, deps: dict) -> bool:
         st.session_state.file_path = tmp_path
         st.session_state.document_name = uploaded_file.name
 
-        tracker = deps["PerformanceTracker"]()
+        progress = st.progress(0, text="Starting...")
 
-        tracker.start("reading")
-        with st.spinner("📖 Reading document..."):
-            text = deps["load_document"](tmp_path)
-            st.session_state.document_text = text
-        tracker.end("reading")
+        progress.progress(10, text="📖 Reading document...")
+        text = deps["load_document"](tmp_path)
+        st.session_state.document_text = text
 
-        tracker.start("chunking")
-        with st.spinner("✂️ Chunking..."):
-            chunks = deps["chunk_text"](text)
-        tracker.end("chunking")
+        progress.progress(35, text="✂️ Chunking document...")
+        chunks = deps["chunk_text"](text)
 
-        tracker.start("indexing")
-        with st.spinner("🔢 Building search index..."):
-            deps["create_vector_store"](chunks)
-            deps["create_bm25_index"](chunks)
-        tracker.end("indexing")
+        progress.progress(60, text="🔢 Building vector index...")
+        deps["create_vector_store"](chunks)
+
+        progress.progress(80, text="🔍 Building keyword index...")
+        deps["create_bm25_index"](chunks)
+
+        progress.progress(100, text="✅ Complete!")
+
+        import time
+        time.sleep(0.5)
+        progress.empty()
 
         st.session_state.document_processed = True
         st.session_state.insights_loaded = False
@@ -370,14 +806,13 @@ def process_document(uploaded_file, deps: dict) -> bool:
         )
         st.session_state.chat_history = []
 
-        doc_entry = {
-            "name": uploaded_file.name,
-            "path": tmp_path,
-            "text": text
-        }
         existing = [d["name"] for d in st.session_state.multi_documents]
         if uploaded_file.name not in existing:
-            st.session_state.multi_documents.append(doc_entry)
+            st.session_state.multi_documents.append({
+                "name": uploaded_file.name,
+                "path": tmp_path,
+                "text": text
+            })
 
         logger.info(f"Document processed: {uploaded_file.name}")
         return True
@@ -396,13 +831,13 @@ def handle_question(question: str, deps: dict):
         st.warning(msg)
         return
 
-    show_chat_message("human", question)
+    show_message("human", question)
     st.session_state.chat_history.append({
         "role": "human",
         "content": question
     })
 
-    with st.spinner("🧠 DocuMind is analysing your question..."):
+    with st.spinner("🧠 Analysing your question..."):
         try:
             result = deps["run_workflow"](
                 question=question,
@@ -414,7 +849,7 @@ def handle_question(question: str, deps: dict):
             answer = result["answer"]
             evidence = result["evidence"]
 
-            show_chat_message("assistant", answer)
+            show_message("assistant", answer)
             show_evidence(evidence)
 
             st.session_state.chat_history.append({
@@ -429,83 +864,89 @@ def handle_question(question: str, deps: dict):
             st.error(error_msg)
             return
 
+    st.markdown("---")
     col1, col2, col3 = st.columns(3)
+
     with col1:
         if st.button(
-            "💡 Suggestions",
-            key=f"sug_{len(st.session_state.chat_history)}"
+            "💡 Get Suggestions",
+            key=f"sug_{len(st.session_state.chat_history)}",
+            use_container_width=True
         ):
+            fn = get_agent("suggestions")
             with st.spinner("Generating..."):
-                fn = get_agent("suggestions")
                 suggestions = fn(question, answer)
+            if suggestions:
+                st.markdown("**Follow-up questions:**")
                 for s in suggestions:
-                    st.markdown(f"- {s}")
+                    st.markdown(f"• {s}")
 
     with col2:
         if st.button(
-            "🎓 Learn More",
-            key=f"know_{len(st.session_state.chat_history)}"
+            "🌐 Related Resources",
+            key=f"res_{len(st.session_state.chat_history)}",
+            use_container_width=True
         ):
-            with st.spinner("Expanding..."):
-                fn = get_agent("knowledge")
-                knowledge = fn(question, answer)
-                if knowledge.get("YOUTUBE_SEARCHES"):
-                    st.markdown("**📺 YouTube:**")
-                    for s in knowledge["YOUTUBE_SEARCHES"]:
-                        st.markdown(f"- {s}")
-                if knowledge.get("RELATED_TOPICS"):
-                    st.markdown("**🔗 Topics:**")
-                    for t in knowledge["RELATED_TOPICS"]:
-                        st.markdown(f"- {t}")
+            show_resources(question, answer)
 
     with col3:
-        export_as_txt, _ = get_export_tools()
+        export_as_txt, export_as_docx = get_export()
         txt_path = export_as_txt(
             answer,
             f"answer_{len(st.session_state.chat_history)}"
         )
         with open(txt_path, "rb") as f:
             st.download_button(
-                "📥 Download",
+                "📥 Download Answer",
                 data=f,
                 file_name="documind_answer.txt",
+                use_container_width=True,
                 key=f"dl_{len(st.session_state.chat_history)}"
             )
 
 
 def main():
     apply_css()
-    show_header()
 
-    with st.spinner("⚡ Starting DocuMind AI..."):
+    with st.spinner("⚡ Loading DocuMind AI..."):
         deps = load_core_dependencies()
 
     initialize_session(deps)
 
     with st.sidebar:
         st.markdown(
-            "<p class='sidebar-title'>Document Upload</p>",
+            "<span class='sidebar-label'>Document Upload</span>",
             unsafe_allow_html=True
         )
 
         uploaded_file = st.file_uploader(
-            "Choose a file",
+            "Drop your file here",
             type=["pdf", "docx", "pptx", "xlsx", "csv", "txt"],
             label_visibility="collapsed"
         )
 
         if uploaded_file:
-            show_file_info(uploaded_file.name, uploaded_file.size)
+            kb = uploaded_file.size / 1024
+            st.markdown(
+                f"""
+                <div class='file-pill'>
+                    <span>📄</span>
+                    <span class='file-pill-name'>{uploaded_file.name}</span>
+                    <span class='file-pill-size'>{kb:.0f} KB</span>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
             if st.button("🚀 Process Document", use_container_width=True):
                 success = process_document(uploaded_file, deps)
                 if success:
-                    st.success("✅ Document ready!")
+                    st.success("✅ Ready to answer questions!")
                     st.rerun()
 
         if st.session_state.document_processed:
             st.markdown("---")
             st.markdown(
-                "<p class='sidebar-title'>Answer Mode</p>",
+                "<span class='sidebar-label'>Answer Style</span>",
                 unsafe_allow_html=True
             )
             mode = st.selectbox(
@@ -525,41 +966,47 @@ def main():
 
             st.markdown("---")
             st.markdown(
-                "<p class='sidebar-title'>Current Document</p>",
+                "<span class='sidebar-label'>Active Document</span>",
                 unsafe_allow_html=True
             )
             st.markdown(
-                f"<div class='file-info-card'><p>📄 {st.session_state.document_name}</p></div>",
+                f"""
+                <div class='file-pill'>
+                    <span>📄</span>
+                    <span class='file-pill-name'>{st.session_state.document_name}</span>
+                </div>
+                """,
                 unsafe_allow_html=True
             )
 
             st.markdown(
-                "<p class='sidebar-title'>Session Stats</p>",
+                "<span class='sidebar-label'>Session</span>",
                 unsafe_allow_html=True
             )
-            show_stats(len(st.session_state.chat_history))
+            st.markdown(
+                f"""
+                <div class='msg-count'>
+                    <span class='msg-number'>{len(st.session_state.chat_history)}</span>
+                    <span class='msg-label'>Messages</span>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
             st.markdown("---")
             st.markdown(
-                "<p class='sidebar-title'>Quick Actions</p>",
+                "<span class='sidebar-label'>Quick Actions</span>",
                 unsafe_allow_html=True
             )
 
-            quick_actions = [
-                "📝 Summarize entire document",
-                "✅ Extract all action items",
-                "⚠️ Identify all risks",
+            for action in [
+                "📝 Summarize document",
+                "✅ Extract action items",
+                "⚠️ Identify risks",
                 "📊 Extract key metrics",
-                "❓ Generate FAQ",
-                "🔄 Rewrite for general audience"
-            ]
-
-            for action in quick_actions:
-                if st.button(
-                    action,
-                    use_container_width=True,
-                    key=f"qa_{action[:12]}"
-                ):
+                "❓ Generate FAQ"
+            ]:
+                if st.button(action, use_container_width=True, key=f"qa_{action[:10]}"):
                     with st.spinner(f"Working on: {action}..."):
                         fn = get_agent("action")
                         result = fn(
@@ -576,30 +1023,29 @@ def main():
 
             st.markdown("---")
 
-            if st.button("🗑️ Clear Chat", use_container_width=True):
-                st.session_state.memory.clear()
-                st.session_state.chat_history = []
-                st.rerun()
-
-            if st.button("📂 New Document", use_container_width=True):
-                for key in [
-                    "document_processed", "file_path", "document_name",
-                    "document_text", "insights_loaded", "entities_loaded",
-                    "map_loaded"
-                ]:
-                    st.session_state[key] = (
-                        False if isinstance(st.session_state[key], bool)
-                        else ""
-                    )
-                st.session_state.entities = {}
-                st.session_state.insights = {}
-                st.session_state.document_map = []
-                st.session_state.chat_history = []
-                st.session_state.memory = deps["SessionMemory"]()
-                st.rerun()
+            col_a, col_b = st.columns(2)
+            with col_a:
+                if st.button("🗑️ Clear", use_container_width=True):
+                    st.session_state.memory.clear()
+                    st.session_state.chat_history = []
+                    st.rerun()
+            with col_b:
+                if st.button("📂 New", use_container_width=True):
+                    for key in ["document_processed", "insights_loaded",
+                                "entities_loaded", "map_loaded"]:
+                        st.session_state[key] = False
+                    for key in ["file_path", "document_name", "document_text"]:
+                        st.session_state[key] = ""
+                    st.session_state.entities = {}
+                    st.session_state.insights = {}
+                    st.session_state.document_map = []
+                    st.session_state.chat_history = []
+                    st.session_state.memory = deps["SessionMemory"]()
+                    st.rerun()
 
     if not st.session_state.document_processed:
-        show_welcome()
+        show_hero()
+        show_welcome_features()
         return
 
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
@@ -615,24 +1061,24 @@ def main():
             with st.expander("🗂️ Multi-Document Query"):
                 multi_q = st.text_input(
                     "Ask across all documents:",
-                    placeholder="Compare the main topics..."
+                    placeholder="Compare topics across all uploaded files..."
                 )
-                if st.button("🔍 Query All"):
+                if st.button("🔍 Query All Documents"):
                     if multi_q:
-                        with st.spinner("Querying..."):
+                        with st.spinner("Querying all documents..."):
                             fn = get_agent("multi_doc")
                             multi_answer = fn(
                                 multi_q,
                                 st.session_state.multi_documents
                             )
-                            show_chat_message("assistant", multi_answer)
+                            show_message("assistant", multi_answer)
                             st.session_state.chat_history.append({
                                 "role": "assistant",
                                 "content": multi_answer
                             })
 
         for message in st.session_state.chat_history:
-            show_chat_message(message["role"], message["content"])
+            show_message(message["role"], message["content"])
 
         col_input, col_voice = st.columns([6, 1])
 
@@ -641,9 +1087,9 @@ def main():
 
         with col_voice:
             try:
-                is_https = (
-                    st.context.headers.get("x-forwarded-proto") == "https"
-                )
+                is_https = st.context.headers.get(
+                    "x-forwarded-proto"
+                ) == "https"
             except Exception:
                 is_https = False
 
@@ -672,9 +1118,7 @@ def main():
 
         if st.session_state.get("show_voice_tip"):
             st.info(
-                "🎤 Voice input requires HTTPS. "
-                "It will work automatically after deployment to Streamlit Cloud. "
-                "For now please type your question."
+                "🎤 Voice works automatically after deploying to Streamlit Cloud with HTTPS."
             )
             if st.button("Got it ✓"):
                 st.session_state.show_voice_tip = False
@@ -686,7 +1130,10 @@ def main():
     with tab2:
         st.markdown("### 🔍 Living Insight Layer")
         if not st.session_state.insights_loaded:
-            st.info("Click below to generate insights from your document.")
+            st.markdown(
+                "<div class='insight-card'><div class='insight-content'>Click below to generate AI-powered insights from your document including summary, key findings, risks, and recommended next steps.</div></div>",
+                unsafe_allow_html=True
+            )
             if st.button("🧠 Generate Insights", use_container_width=True):
                 with st.spinner("Generating insights..."):
                     fn = get_agent("insight")
@@ -701,18 +1148,29 @@ def main():
                 "SUMMARY": ("📄", "Document Summary"),
                 "KEY_FINDINGS": ("🎯", "Key Findings"),
                 "ACTION_ITEMS": ("✅", "Action Items"),
-                "RISKS": ("⚠️", "Risks"),
+                "RISKS": ("⚠️", "Risks and Concerns"),
                 "DECISIONS": ("💡", "Key Decisions"),
-                "NEXT_STEPS": ("🚀", "Next Steps")
+                "NEXT_STEPS": ("🚀", "Recommended Next Steps")
             }
             for key, (icon, title) in icon_map.items():
                 if insights.get(key):
-                    show_insight_card(title, insights[key], icon)
+                    st.markdown(
+                        f"""
+                        <div class='insight-card'>
+                            <div class='insight-icon-title'>{icon} {title}</div>
+                            <div class='insight-content'>{insights[key]}</div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
 
     with tab3:
         st.markdown("### 📊 Entity Extraction Dashboard")
         if not st.session_state.entities_loaded:
-            st.info("Click below to extract entities from your document.")
+            st.markdown(
+                "<div class='insight-card'><div class='insight-content'>Click below to extract people, organizations, dates, locations, and key terms from your document.</div></div>",
+                unsafe_allow_html=True
+            )
             if st.button("🔍 Extract Entities", use_container_width=True):
                 with st.spinner("Extracting entities..."):
                     fn = get_agent("entity")
@@ -723,16 +1181,20 @@ def main():
                     st.rerun()
         else:
             entities = st.session_state.entities
+            entity_icons = {
+                "PEOPLE": "👤",
+                "ORGANIZATIONS": "🏢",
+                "DATES": "📅",
+                "LOCATIONS": "📍",
+                "KEY_TERMS": "🔑",
+                "ACTION_ITEMS": "✅"
+            }
             for entity_type, values in entities.items():
                 if values:
-                    st.markdown(f"**{entity_type}:**")
+                    icon = entity_icons.get(entity_type, "•")
+                    st.markdown(f"**{icon} {entity_type}**")
                     tags = "".join([
-                        f"<span style='display:inline-block;"
-                        f"background:rgba(210,153,34,0.1);"
-                        f"border:1px solid rgba(210,153,34,0.3);"
-                        f"border-radius:6px;padding:3px 10px;"
-                        f"margin:3px;font-size:0.8rem;"
-                        f"color:#d29922;'>{v}</span>"
+                        f"<span class='entity-tag'>{v}</span>"
                         for v in values
                     ])
                     st.markdown(tags, unsafe_allow_html=True)
@@ -741,7 +1203,10 @@ def main():
     with tab4:
         st.markdown("### 🗺️ Document Map")
         if not st.session_state.map_loaded:
-            st.info("Click below to build a navigation map of your document.")
+            st.markdown(
+                "<div class='insight-card'><div class='insight-content'>Click below to build a smart navigation map of your document sections and headings.</div></div>",
+                unsafe_allow_html=True
+            )
             if st.button("🗺️ Build Document Map", use_container_width=True):
                 with st.spinner("Building map..."):
                     fn = get_agent("document_map")
@@ -755,7 +1220,7 @@ def main():
                 with st.expander(f"📍 {section['title']}"):
                     st.markdown(section.get("description", ""))
                     if st.button(
-                        "Ask about this",
+                        "Ask about this section",
                         key=f"map_{section['title'][:20]}"
                     ):
                         handle_question(
@@ -765,41 +1230,54 @@ def main():
 
     with tab5:
         st.markdown("### ✂️ Ask by Selection")
-        st.markdown("Paste any text from the document and ask about it.")
+        st.markdown(
+            "<div class='insight-card'><div class='insight-content'>Paste any specific text from your document and choose an action. The AI will analyze just that selected portion with laser precision.</div></div>",
+            unsafe_allow_html=True
+        )
 
         selected_text = st.text_area(
             "Paste text here:",
-            placeholder="Paste any paragraph or section...",
-            height=130
+            placeholder="Paste any paragraph, sentence, table, or section from your document...",
+            height=140
         )
 
         selected_action = st.selectbox(
-            "Action:",
+            "Choose action:",
             options=[
-                "Explain this",
+                "Explain this in detail",
                 "Simplify this",
-                "Find issues",
+                "Find issues or problems",
                 "Summarize this",
-                "Key points here?",
-                "Rewrite professionally"
+                "Extract key points",
+                "Rewrite professionally",
+                "Translate to simple English"
             ]
         )
 
-        if st.button("🔍 Analyze", use_container_width=True):
+        if st.button("🔍 Analyze Selection", use_container_width=True):
             if selected_text.strip():
                 with st.spinner("Analyzing..."):
                     fn = get_agent("selection")
                     result = fn(selected_text, selected_action)
-                    st.markdown("### Result:")
-                    st.markdown(result)
-                    export_as_txt, _ = get_export_tools()
-                    path = export_as_txt(result, "selection")
-                    with open(path, "rb") as f:
-                        st.download_button(
-                            "📥 Download",
-                            data=f,
-                            file_name="selection.txt"
-                        )
+
+                st.markdown(
+                    f"""
+                    <div class='insight-card'>
+                        <div class='insight-icon-title'>✨ Analysis Result</div>
+                        <div class='insight-content'>{result}</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+                export_as_txt, _ = get_export()
+                path = export_as_txt(result, "selection")
+                with open(path, "rb") as f:
+                    st.download_button(
+                        "📥 Download Result",
+                        data=f,
+                        file_name="selection_analysis.txt"
+                    )
             else:
                 st.warning("Please paste some text first.")
 
