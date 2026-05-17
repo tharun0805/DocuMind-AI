@@ -73,7 +73,8 @@ def initialize_session():
         "multi_documents": [],
         "insights_loaded": False,
         "entities_loaded": False,
-        "map_loaded": False
+        "map_loaded": False,
+        "show_voice_tip": False
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -218,26 +219,6 @@ def handle_question(question: str, answer_mode: str):
         show_warning(validation_message)
         return
 
-    if not st.session_state.awaiting_clarification:
-        ambiguous_words = [
-            "explain", "describe", "tell me about",
-            "what about", "how about", "discuss"
-        ]
-        is_ambiguous = any(
-            word in question.lower() for word in ambiguous_words
-        ) and len(question.split()) < 6
-
-        if is_ambiguous:
-            clarification = needs_clarification(question)
-            if clarification["needs_clarification"]:
-                st.session_state.awaiting_clarification = True
-                st.session_state.pending_question = question
-                st.session_state.clarification_questions = (
-                    clarification["questions"]
-                )
-                st.rerun()
-                return
-
     st.session_state.awaiting_clarification = False
     st.session_state.pending_question = None
 
@@ -249,17 +230,12 @@ def handle_question(question: str, answer_mode: str):
 
     with show_thinking():
         try:
-            tracker = PerformanceTracker()
-            tracker.start("workflow")
-
             result = run_workflow(
                 question=question,
                 memory=st.session_state.memory,
                 file_path=st.session_state.file_path,
                 answer_mode=answer_mode
             )
-
-            tracker.end("workflow")
 
             answer = result["answer"]
             evidence = result["evidence"]
@@ -272,88 +248,45 @@ def handle_question(question: str, answer_mode: str):
                 "content": answer
             })
 
+            st.session_state[f"last_question"] = question
+            st.session_state[f"last_answer"] = answer
+
         except Exception as e:
             error_message = handle_error(e, context="workflow")
             show_error(error_message)
             return
 
-    with st.spinner("⚡ Generating suggestions..."):
-        try:
-            suggestions, actions, knowledge = run_post_answer_tasks(
-                question, answer
-            )
-        except Exception:
-            suggestions, actions, knowledge = [], [], {}
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if st.button("💡 Get Suggestions", key=f"sug_btn_{len(st.session_state.chat_history)}"):
+            with st.spinner("Generating..."):
+                suggestions = generate_suggestions(question, answer)
+                if suggestions:
+                    for s in suggestions:
+                        st.markdown(f"- {s}")
 
-    if suggestions:
-        st.markdown(
-            "<p style='color:#8b949e;font-size:0.8rem;margin-top:12px;'>💡 Follow-up questions:</p>",
-            unsafe_allow_html=True
-        )
-        cols = st.columns(len(suggestions))
-        for i, suggestion in enumerate(suggestions):
-            with cols[i]:
-                if st.button(
-                    suggestion,
-                    key=f"sug_{i}_{suggestion[:15]}"
-                ):
-                    handle_question(suggestion, answer_mode)
+    with col2:
+        if st.button("🎓 Learn More", key=f"know_btn_{len(st.session_state.chat_history)}"):
+            with st.spinner("Expanding knowledge..."):
+                knowledge = expand_knowledge(question, answer)
+                if knowledge:
+                    if knowledge.get("YOUTUBE_SEARCHES"):
+                        st.markdown("**📺 YouTube:**")
+                        for s in knowledge["YOUTUBE_SEARCHES"]:
+                            st.markdown(f"- {s}")
+                    if knowledge.get("RELATED_TOPICS"):
+                        st.markdown("**🔗 Topics:**")
+                        for t in knowledge["RELATED_TOPICS"]:
+                            st.markdown(f"- {t}")
 
-    if actions:
-        st.markdown(
-            "<p style='color:#8b949e;font-size:0.8rem;'>⚡ Next actions:</p>",
-            unsafe_allow_html=True
-        )
-        for action in actions:
-            st.markdown(
-                f"<span style='background:rgba(88,166,255,0.08);border:1px solid rgba(88,166,255,0.2);border-radius:20px;padding:4px 12px;font-size:0.8rem;color:#58a6ff;margin:3px;display:inline-block;'>{action}</span>",
-                unsafe_allow_html=True
-            )
-
-    if knowledge:
-        with st.expander("🎓 Knowledge Expansion"):
-            if knowledge.get("YOUTUBE_SEARCHES"):
-                st.markdown("**📺 Search on YouTube:**")
-                for s in knowledge["YOUTUBE_SEARCHES"]:
-                    st.markdown(f"- {s}")
-            if knowledge.get("RELATED_TOPICS"):
-                st.markdown("**🔗 Related Topics:**")
-                for t in knowledge["RELATED_TOPICS"]:
-                    st.markdown(f"- {t}")
-            if knowledge.get("SIMILAR_RESOURCES"):
-                st.markdown("**📚 Similar Resources:**")
-                for r in knowledge["SIMILAR_RESOURCES"]:
-                    st.markdown(f"- {r}")
-            if knowledge.get("LEARN_MORE"):
-                st.markdown("**🎯 Learn More:**")
-                for item in knowledge["LEARN_MORE"]:
-                    st.markdown(f"- {item}")
-
-    col_dl1, col_dl2 = st.columns(2)
-    with col_dl1:
-        txt_path = export_as_txt(
-            answer,
-            f"answer_{len(st.session_state.chat_history)}"
-        )
+    with col3:
+        txt_path = export_as_txt(answer, f"answer_{len(st.session_state.chat_history)}")
         with open(txt_path, "rb") as f:
             st.download_button(
-                "📥 Download as TXT",
+                "📥 Download",
                 data=f,
                 file_name="documind_answer.txt",
-                key=f"dl_txt_{len(st.session_state.chat_history)}"
-            )
-    with col_dl2:
-        docx_path = export_as_docx(
-            answer,
-            f"answer_{len(st.session_state.chat_history)}"
-        )
-        with open(docx_path, "rb") as f:
-            st.download_button(
-                "📥 Download as DOCX",
-                data=f,
-                file_name="documind_answer.docx",
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                key=f"dl_docx_{len(st.session_state.chat_history)}"
+                key=f"dl_{len(st.session_state.chat_history)}"
             )
 
 
@@ -543,26 +476,49 @@ def main():
             question = st.chat_input("Ask anything about your document...")
 
         with col_voice:
-            try:
-                from streamlit_mic_recorder import mic_recorder
-                audio = mic_recorder(
-                    start_prompt="🎤",
-                    stop_prompt="⏹️",
-                    key="voice"
-                )
-                if audio and audio.get("bytes"):
-                    with st.spinner("🎤 Transcribing..."):
-                        voice_result = transcribe_audio_file(audio["bytes"])
-                        if voice_result["success"]:
-                            question = voice_result["text"]
-                            show_success(f"Voice: {question}")
-                        else:
-                            show_warning("Could not transcribe. Type instead.")
-            except Exception:
-                st.button("🎤", help="Voice unavailable")
+            is_https = (
+                st.context.headers.get("x-forwarded-proto") == "https"
+                if hasattr(st, "context")
+                else False
+            )
 
-        if question:
-            handle_question(question, st.session_state.answer_mode)
+            if is_https:
+                try:
+                    from streamlit_mic_recorder import mic_recorder
+                    audio = mic_recorder(
+                        start_prompt="🎤",
+                        stop_prompt="⏹️",
+                        key="voice_recorder"
+                    )
+                    if audio and audio.get("bytes"):
+                        with st.spinner("🎤 Transcribing..."):
+                            voice_result = transcribe_audio_file(
+                                audio["bytes"]
+                            )
+                            if voice_result["success"]:
+                                question = voice_result["text"]
+                                show_success(
+                                    f"Voice captured: {question}"
+                                )
+                            else:
+                                show_warning(voice_result["error"])
+                except Exception as e:
+                    logger.error(f"Voice recorder error: {e}")
+                    st.button("🎤", help="Voice unavailable")
+            else:
+                if st.button("🎤", help="Voice works after deployment with HTTPS"):
+                    st.session_state["show_voice_tip"] = True
+
+        if st.session_state.get("show_voice_tip"):
+            st.info(
+                "🎤 Voice input requires HTTPS. "
+                "It will work automatically after you deploy to "
+                "Streamlit Cloud or any HTTPS server. "
+                "For now please type your question."
+            )
+            if st.button("Got it ✓", key="dismiss_voice_tip"):
+                st.session_state["show_voice_tip"] = False
+                st.rerun()
 
     with tab2:
         st.markdown("### 🔍 Living Insight Layer")
