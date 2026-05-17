@@ -1,44 +1,34 @@
 import time
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import PromptTemplate
-from utils.config import get_google_api_key
+from utils.llm_provider import get_shared_llm
 from loguru import logger
 
 
-def get_llm():
-    return ChatGoogleGenerativeAI(
-        model="models/gemini-2.5-flash",
-        google_api_key=get_google_api_key(),
-        temperature=0.3
-    )
-
-
 def expand_knowledge(question: str, answer: str) -> dict:
-    logger.info("Expanding knowledge based on answer...")
+    logger.info("Expanding knowledge...")
 
     prompt = PromptTemplate(
         input_variables=["question", "answer"],
         template="""
-        Based on this document question and answer suggest learning resources.
+        Based on this question and answer suggest learning resources.
 
         Question: {question}
         Answer: {answer}
 
-        Provide exactly:
+        YOUTUBE_SEARCHES: [3 YouTube search queries one per line]
 
-        YOUTUBE_SEARCHES: [3 specific YouTube search queries to learn more, one per line]
+        RELATED_TOPICS: [3 related topics one per line]
 
-        RELATED_TOPICS: [3 related topics worth exploring, one per line]
+        SIMILAR_RESOURCES: [3 resource types one per line]
 
-        SIMILAR_RESOURCES: [3 types of resources to find like documentation papers tutorials, one per line]
-
-        LEARN_MORE: [2 specific things to study next, one per line]
+        LEARN_MORE: [2 things to study next one per line]
         """
     )
 
     for attempt in range(3):
         try:
-            chain = prompt | get_llm()
+            llm = get_shared_llm(temperature=0.3)
+            chain = prompt | llm
             result = chain.invoke({
                 "question": question,
                 "answer": answer
@@ -56,10 +46,8 @@ def expand_knowledge(question: str, answer: str) -> dict:
 
                 found = False
                 for key in [
-                    "YOUTUBE_SEARCHES",
-                    "RELATED_TOPICS",
-                    "SIMILAR_RESOURCES",
-                    "LEARN_MORE"
+                    "YOUTUBE_SEARCHES", "RELATED_TOPICS",
+                    "SIMILAR_RESOURCES", "LEARN_MORE"
                 ]:
                     if line.startswith(key + ":"):
                         if current_key:
@@ -76,15 +64,12 @@ def expand_knowledge(question: str, answer: str) -> dict:
             if current_key:
                 knowledge[current_key] = current_items
 
-            logger.info("Knowledge expansion complete")
             return knowledge
 
         except Exception as e:
             if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
-                wait_time = 60 * (attempt + 1)
-                logger.warning(f"Rate limit. Waiting {wait_time}s...")
-                time.sleep(wait_time)
+                time.sleep(60 * (attempt + 1))
             else:
-                raise e
+                return {}
 
     return {}

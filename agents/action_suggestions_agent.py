@@ -1,16 +1,7 @@
 import time
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import PromptTemplate
-from utils.config import get_google_api_key
+from utils.llm_provider import get_shared_llm
 from loguru import logger
-
-
-def get_llm():
-    return ChatGoogleGenerativeAI(
-        model="models/gemini-2.5-flash",
-        google_api_key=get_google_api_key(),
-        temperature=0.3
-    )
 
 
 def suggest_next_actions(question: str, answer: str) -> list[str]:
@@ -39,7 +30,8 @@ def suggest_next_actions(question: str, answer: str) -> list[str]:
 
     for attempt in range(3):
         try:
-            chain = prompt | get_llm()
+            llm = get_shared_llm(temperature=0.3)
+            chain = prompt | llm
             result = chain.invoke({
                 "question": question,
                 "answer": answer
@@ -51,16 +43,12 @@ def suggest_next_actions(question: str, answer: str) -> list[str]:
                 if line.strip() and len(line.strip()) > 3
             ]
 
-            actions = lines[:4]
-            logger.info(f"Generated {len(actions)} next actions")
-            return actions
+            return lines[:4]
 
         except Exception as e:
             if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
-                wait_time = 60 * (attempt + 1)
-                logger.warning(f"Rate limit. Waiting {wait_time}s...")
-                time.sleep(wait_time)
+                time.sleep(60 * (attempt + 1))
             else:
-                raise e
+                return []
 
     return []

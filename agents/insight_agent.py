@@ -1,22 +1,11 @@
 import time
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import PromptTemplate
-from utils.config import get_google_api_key
+from utils.llm_provider import get_shared_llm
 from loguru import logger
 
 
-def get_llm():
-    return ChatGoogleGenerativeAI(
-        model="models/gemini-2.5-flash",
-        google_api_key=get_google_api_key(),
-        temperature=0.2
-    )
-
-
 def generate_insights(text: str) -> dict:
-    logger.info("Generating living insights from document...")
-
-    sample = text[:4000]
+    logger.info("Generating living insights...")
 
     prompt = PromptTemplate(
         input_variables=["text"],
@@ -25,26 +14,25 @@ def generate_insights(text: str) -> dict:
 
         Document: {text}
 
-        Provide analysis with these exact sections:
-
-        SUMMARY: [2-3 sentence overview of entire document]
+        SUMMARY: [2-3 sentence overview]
 
         KEY_FINDINGS: [3 most important findings one per line]
 
-        ACTION_ITEMS: [up to 3 action items mentioned one per line]
+        ACTION_ITEMS: [up to 3 action items one per line]
 
-        RISKS: [up to 3 risks or concerns identified one per line]
+        RISKS: [up to 3 risks identified one per line]
 
-        DECISIONS: [up to 3 key decisions or recommendations one per line]
+        DECISIONS: [up to 3 key decisions one per line]
 
-        NEXT_STEPS: [2 recommended next steps for the reader one per line]
+        NEXT_STEPS: [2 recommended next steps one per line]
         """
     )
 
     for attempt in range(3):
         try:
-            chain = prompt | get_llm()
-            result = chain.invoke({"text": sample})
+            llm = get_shared_llm(temperature=0.2)
+            chain = prompt | llm
+            result = chain.invoke({"text": text[:4000]})
             content = result.content.strip()
 
             insights = {}
@@ -63,9 +51,7 @@ def generate_insights(text: str) -> dict:
                 ]:
                     if line.startswith(key + ":"):
                         if current_key:
-                            insights[current_key] = "\n".join(
-                                current_lines
-                            )
+                            insights[current_key] = "\n".join(current_lines)
                         current_key = key
                         rest = line[len(key)+1:].strip()
                         current_lines = [rest] if rest else []
@@ -83,10 +69,8 @@ def generate_insights(text: str) -> dict:
 
         except Exception as e:
             if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
-                wait_time = 60 * (attempt + 1)
-                logger.warning(f"Rate limit. Waiting {wait_time}s...")
-                time.sleep(wait_time)
+                time.sleep(60 * (attempt + 1))
             else:
-                raise e
+                return {}
 
     return {}
