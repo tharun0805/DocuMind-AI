@@ -25,3 +25,4 @@ speechrecognition
 streamlit-mic-recorder
 reportlab
 langchain-groq
+plotly
