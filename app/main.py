@@ -633,150 +633,6 @@ def answer_q(question: str, deps):
     show_resources_section(question, answer)
 
 
-HERO_HTML = """
-<div style="
-    min-height: 94vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    padding: 60px 24px;
-    position: relative;
-">
-    <div style="
-        position: absolute; inset: 0;
-        background:
-            radial-gradient(ellipse 55% 45% at 20% 25%, rgba(99,102,241,0.1) 0%, transparent 55%),
-            radial-gradient(ellipse 45% 35% at 80% 70%, rgba(6,182,212,0.07) 0%, transparent 55%),
-            radial-gradient(ellipse 35% 55% at 55% 50%, rgba(139,92,246,0.05) 0%, transparent 60%);
-        pointer-events: none;
-    "></div>
-
-    <div style="
-        display: inline-flex; align-items: center; gap: 8px;
-        background: rgba(99,102,241,0.07);
-        border: 1px solid rgba(99,102,241,0.18);
-        border-radius: 100px;
-        padding: 7px 20px;
-        font-size: 0.65rem;
-        font-weight: 700;
-        color: #818cf8;
-        letter-spacing: 2.5px;
-        text-transform: uppercase;
-        margin-bottom: 28px;
-        position: relative;
-    ">
-        <div style="width:5px;height:5px;background:#22c55e;border-radius:50%;animation:blink 2s ease infinite;"></div>
-        Enterprise Document Intelligence
-    </div>
-
-    <div style="
-        font-size: clamp(2.8rem, 7vw, 5rem);
-        font-weight: 900;
-        letter-spacing: -3px;
-        line-height: 1;
-        margin-bottom: 20px;
-        background: linear-gradient(135deg, #ffffff 0%, #a5b4fc 30%, #06b6d4 65%, #ffffff 100%);
-        background-size: 300% auto;
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        animation: titleflow 8s linear infinite;
-        position: relative;
-    ">DocuMind AI</div>
-
-    <div style="
-        font-size: 1.05rem;
-        color: #475569;
-        max-width: 500px;
-        line-height: 1.8;
-        margin: 0 auto 48px;
-        font-weight: 400;
-        position: relative;
-    ">
-        Upload any document. Ask in plain English.<br>
-        Get answers, charts, quizzes, and knowledge — instantly.
-    </div>
-
-    <div style="
-        display: flex; gap: 0;
-        border: 1px solid rgba(255,255,255,0.05);
-        border-radius: 14px; overflow: hidden;
-        max-width: 580px; margin: 0 auto 64px;
-        background: rgba(8,10,22,0.7);
-        backdrop-filter: blur(20px);
-        position: relative;
-    ">
-        <div style="flex:1;padding:18px 12px;text-align:center;border-right:1px solid rgba(255,255,255,0.05);">
-            <div style="font-size:1.4rem;font-weight:800;background:linear-gradient(135deg,#a5b4fc,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">6+</div>
-            <div style="font-size:0.6rem;color:#334155;text-transform:uppercase;letter-spacing:1.5px;margin-top:3px;">Formats</div>
-        </div>
-        <div style="flex:1;padding:18px 12px;text-align:center;border-right:1px solid rgba(255,255,255,0.05);">
-            <div style="font-size:1.4rem;font-weight:800;background:linear-gradient(135deg,#a5b4fc,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">5</div>
-            <div style="font-size:0.6rem;color:#334155;text-transform:uppercase;letter-spacing:1.5px;margin-top:3px;">AI Agents</div>
-        </div>
-        <div style="flex:1;padding:18px 12px;text-align:center;border-right:1px solid rgba(255,255,255,0.05);">
-            <div style="font-size:1.4rem;font-weight:800;background:linear-gradient(135deg,#a5b4fc,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">20+</div>
-            <div style="font-size:0.6rem;color:#334155;text-transform:uppercase;letter-spacing:1.5px;margin-top:3px;">Features</div>
-        </div>
-        <div style="flex:1;padding:18px 12px;text-align:center;">
-            <div style="font-size:1.4rem;font-weight:800;background:linear-gradient(135deg,#a5b4fc,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">100%</div>
-            <div style="font-size:0.6rem;color:#334155;text-transform:uppercase;letter-spacing:1.5px;margin-top:3px;">Private</div>
-        </div>
-    </div>
-
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;max-width:860px;margin:0 auto;position:relative;">
-        <div style="background:rgba(8,10,22,0.7);border:1px solid rgba(255,255,255,0.04);border-radius:13px;padding:18px 14px;text-align:left;transition:all 0.25s;">
-            <span style="font-size:1.4rem;display:block;margin-bottom:8px;">📊</span>
-            <div style="color:#cbd5e1;font-size:0.82rem;font-weight:600;margin-bottom:3px;">Auto Charts</div>
-            <div style="color:#334155;font-size:0.71rem;line-height:1.5;">Ask for a chart — real Plotly graphs generated instantly</div>
-        </div>
-        <div style="background:rgba(8,10,22,0.7);border:1px solid rgba(255,255,255,0.04);border-radius:13px;padding:18px 14px;text-align:left;">
-            <span style="font-size:1.4rem;display:block;margin-bottom:8px;">🧩</span>
-            <div style="color:#cbd5e1;font-size:0.82rem;font-weight:600;margin-bottom:3px;">Quiz Mode</div>
-            <div style="color:#334155;font-size:0.71rem;line-height:1.5;">Ask for a quiz — MCQ questions from document</div>
-        </div>
-        <div style="background:rgba(8,10,22,0.7);border:1px solid rgba(255,255,255,0.04);border-radius:13px;padding:18px 14px;text-align:left;">
-            <span style="font-size:1.4rem;display:block;margin-bottom:8px;">🔊</span>
-            <div style="color:#cbd5e1;font-size:0.82rem;font-weight:600;margin-bottom:3px;">Read Aloud</div>
-            <div style="color:#334155;font-size:0.71rem;line-height:1.5;">Browser text-to-speech on every answer</div>
-        </div>
-        <div style="background:rgba(8,10,22,0.7);border:1px solid rgba(255,255,255,0.04);border-radius:13px;padding:18px 14px;text-align:left;">
-            <span style="font-size:1.4rem;display:block;margin-bottom:8px;">🌐</span>
-            <div style="color:#cbd5e1;font-size:0.82rem;font-weight:600;margin-bottom:3px;">Live Resources</div>
-            <div style="color:#334155;font-size:0.71rem;line-height:1.5;">YouTube + Google + Scholar links after every answer</div>
-        </div>
-        <div style="background:rgba(8,10,22,0.7);border:1px solid rgba(255,255,255,0.04);border-radius:13px;padding:18px 14px;text-align:left;">
-            <span style="font-size:1.4rem;display:block;margin-bottom:8px;">📥</span>
-            <div style="color:#cbd5e1;font-size:0.82rem;font-weight:600;margin-bottom:3px;">Export Anything</div>
-            <div style="color:#334155;font-size:0.71rem;line-height:1.5;">PDF, DOCX, Excel, CSV — ask to download</div>
-        </div>
-        <div style="background:rgba(8,10,22,0.7);border:1px solid rgba(255,255,255,0.04);border-radius:13px;padding:18px 14px;text-align:left;">
-            <span style="font-size:1.4rem;display:block;margin-bottom:8px;">💡</span>
-            <div style="color:#cbd5e1;font-size:0.82rem;font-weight:600;margin-bottom:3px;">Smart Prompts</div>
-            <div style="color:#334155;font-size:0.71rem;line-height:1.5;">Auto-generated questions from your document</div>
-        </div>
-        <div style="background:rgba(8,10,22,0.7);border:1px solid rgba(255,255,255,0.04);border-radius:13px;padding:18px 14px;text-align:left;">
-            <span style="font-size:1.4rem;display:block;margin-bottom:8px;">🔍</span>
-            <div style="color:#cbd5e1;font-size:0.82rem;font-weight:600;margin-bottom:3px;">Hybrid Search</div>
-            <div style="color:#334155;font-size:0.71rem;line-height:1.5;">FAISS semantic + BM25 keyword with RRF</div>
-        </div>
-        <div style="background:rgba(8,10,22,0.7);border:1px solid rgba(255,255,255,0.04);border-radius:13px;padding:18px 14px;text-align:left;">
-            <span style="font-size:1.4rem;display:block;margin-bottom:8px;">🔒</span>
-            <div style="color:#cbd5e1;font-size:0.82rem;font-weight:600;margin-bottom:3px;">100% Private</div>
-            <div style="color:#334155;font-size:0.71rem;line-height:1.5;">Documents never leave your machine</div>
-        </div>
-    </div>
-</div>
-
-<style>
-@keyframes blink{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.3;transform:scale(0.75);}}
-@keyframes titleflow{0%{background-position:0% center;}100%{background-position:300% center;}}
-</style>
-"""
-
-
 CSS = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
@@ -1083,6 +939,72 @@ SIDEBAR_CSS = """
 """
 
 
+def show_hero():
+    st.markdown("""
+    <style>
+    @keyframes blink{0%,100%{opacity:1;}50%{opacity:0.3;}}
+    @keyframes titleflow{0%{background-position:0% center;}100%{background-position:300% center;}}
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+    <div style="text-align:center;padding:60px 24px 20px;">
+        <div style="display:inline-flex;align-items:center;gap:8px;background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.18);border-radius:100px;padding:7px 20px;font-size:0.65rem;font-weight:700;color:#818cf8;letter-spacing:2.5px;text-transform:uppercase;margin-bottom:28px;">
+            <div style="width:5px;height:5px;background:#22c55e;border-radius:50%;animation:blink 2s ease infinite;"></div>
+            Enterprise Document Intelligence
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+    <div style="text-align:center;padding:0 24px;">
+        <div style="font-size:clamp(2.8rem,7vw,5rem);font-weight:900;letter-spacing:-3px;line-height:1;margin-bottom:20px;background:linear-gradient(135deg,#ffffff 0%,#a5b4fc 30%,#06b6d4 65%,#ffffff 100%);background-size:300% auto;-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;animation:titleflow 8s linear infinite;">DocuMind AI</div>
+        <div style="font-size:1.05rem;color:#475569;max-width:500px;line-height:1.8;margin:0 auto 48px;font-weight:400;">Upload any document. Ask in plain English.<br>Get answers, charts, quizzes, and knowledge instantly.</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    col1, col2, col3, col4 = st.columns(4)
+    for col, val, lbl in zip(
+        [col1, col2, col3, col4],
+        ["6+", "5", "20+", "100%"],
+        ["Formats", "AI Agents", "Features", "Private"]
+    ):
+        with col:
+            st.markdown(f"""
+            <div style="background:rgba(8,10,22,0.7);border:1px solid rgba(255,255,255,0.05);border-radius:12px;padding:18px 12px;text-align:center;">
+                <div style="font-size:1.5rem;font-weight:800;background:linear-gradient(135deg,#a5b4fc,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">{val}</div>
+                <div style="font-size:0.6rem;color:#334155;text-transform:uppercase;letter-spacing:1.5px;margin-top:4px;">{lbl}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    features = [
+        ("📊", "Auto Charts", "Say 'show chart' — real graphs generated instantly"),
+        ("🧩", "Quiz Mode", "Say 'give me a quiz' — MCQ from document"),
+        ("🔊", "Read Aloud", "Every answer spoken aloud by browser"),
+        ("🌐", "Live Resources", "YouTube + Google + Scholar after every answer"),
+        ("📥", "Export Anything", "PDF, DOCX, Excel, CSV on demand"),
+        ("💡", "Smart Prompts", "Auto-generated questions from document"),
+        ("🔍", "Hybrid Search", "FAISS semantic + BM25 keyword with RRF"),
+        ("🔒", "100% Private", "Nothing ever leaves your machine"),
+    ]
+
+    row1 = st.columns(4)
+    row2 = st.columns(4)
+
+    for i, (icon, name, desc) in enumerate(features):
+        col = row1[i] if i < 4 else row2[i - 4]
+        with col:
+            st.markdown(f"""
+            <div style="background:rgba(8,10,22,0.7);border:1px solid rgba(255,255,255,0.04);border-radius:13px;padding:18px 14px;margin-bottom:10px;transition:all 0.25s;">
+                <span style="font-size:1.4rem;display:block;margin-bottom:8px;">{icon}</span>
+                <div style="color:#cbd5e1;font-size:0.82rem;font-weight:600;margin-bottom:4px;">{name}</div>
+                <div style="color:#334155;font-size:0.71rem;line-height:1.5;">{desc}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+
 def main():
     st.markdown(CSS, unsafe_allow_html=True)
     st.markdown(SIDEBAR_CSS, unsafe_allow_html=True)
@@ -1189,7 +1111,7 @@ def main():
                     st.rerun()
 
     if not st.session_state.doc_ready:
-        st.markdown(HERO_HTML, unsafe_allow_html=True)
+        show_hero()
         return
 
     if st.session_state.prompts:
