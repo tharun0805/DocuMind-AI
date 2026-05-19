@@ -2,6 +2,10 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Set environment variables before any imports
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+os.environ["TRANSFORMERS_VERBOSITY"] = "error"
+
 import streamlit as st
 import streamlit.components.v1 as components
 import time
@@ -441,6 +445,8 @@ Questions:"""
 
 def process_doc(f, deps) -> bool:
     import tempfile
+    from concurrent.futures import ThreadPoolExecutor
+
     try:
         suffix = f".{f.name.split('.')[-1]}"
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
@@ -455,27 +461,25 @@ def process_doc(f, deps) -> bool:
         st.session_state.file_path = tmp_path
         st.session_state.doc_name = f.name
 
-        pb = st.progress(0, "📖 Reading document...")
+        pb = st.progress(0, "📖 Reading...")
         text = deps["load_document"](tmp_path)
         st.session_state.doc_text = text
 
-        pb.progress(35, "✂️ Chunking...")
+        pb.progress(30, "✂️ Chunking...")
         chunks = deps["chunk_text"](text)
 
-        pb.progress(65, "🔢 Building search indexes in parallel...")
-        from concurrent.futures import ThreadPoolExecutor
+        pb.progress(55, "🔢 Building indexes in parallel...")
         with ThreadPoolExecutor(max_workers=2) as executor:
-            f1 = executor.submit(deps["create_vector_store"], chunks)
-            f2 = executor.submit(deps["create_bm25_index"], chunks)
-            f1.result()
-            f2.result()
+            fut1 = executor.submit(deps["create_vector_store"], chunks)
+            fut2 = executor.submit(deps["create_bm25_index"], chunks)
+            fut1.result()
+            fut2.result()
 
-        pb.progress(88, "💡 Almost ready...")
-        st.session_state.prompts = []
-        st.session_state.pending_prompts = text[:1500]
+        pb.progress(85, "💡 Generating smart prompts...")
+        st.session_state.prompts = gen_prompts(text)
 
         pb.progress(100, "✅ Ready!")
-        time.sleep(0.2)
+        time.sleep(0.15)
         pb.empty()
 
         st.session_state.doc_ready = True
@@ -484,9 +488,14 @@ def process_doc(f, deps) -> bool:
 
         existing = [d["name"] for d in st.session_state.multi_docs]
         if f.name not in existing:
-            st.session_state.multi_docs.append({"name": f.name, "path": tmp_path, "text": text})
+            st.session_state.multi_docs.append({
+                "name": f.name,
+                "path": tmp_path,
+                "text": text
+            })
 
         return True
+
     except Exception as e:
         st.error(deps["handle_error"](e, "upload"))
         return False
@@ -643,7 +652,7 @@ CSS = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 
-html, body, [class*="css"], * {
+html, body, [class*="css"] * {
     font-family: 'Inter', -apple-system, sans-serif !important;
 }
 
@@ -651,15 +660,34 @@ html, body, [class*="css"], * {
     background: #04060f !important;
 }
 
+/* ── SIDEBAR ── */
 section[data-testid="stSidebar"] {
     background: rgba(4,6,15,0.99) !important;
     border-right: 1px solid rgba(99,102,241,0.08) !important;
 }
-
 section[data-testid="stSidebar"] * {
     color: #94a3b8 !important;
 }
 
+/* ── FILE UPLOADER FIX ── */
+[data-testid="stFileUploader"] label,
+[data-testid="stFileUploader"] > div > label {
+    display: none !important;
+}
+[data-testid="stFileUploaderDropzone"] button {
+    background: linear-gradient(135deg, #4f46e5, #6366f1) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+    font-size: 0.8rem !important;
+}
+[data-testid="stFileUploaderDropzone"] small {
+    color: #374151 !important;
+    font-size: 0.72rem !important;
+}
+
+/* ── BUTTONS ── */
 .stButton > button {
     background: linear-gradient(135deg, #4f46e5, #6366f1) !important;
     color: #fff !important;
@@ -670,83 +698,83 @@ section[data-testid="stSidebar"] * {
     transition: all 0.2s !important;
     box-shadow: 0 2px 10px rgba(79,70,229,0.2) !important;
 }
-
 .stButton > button:hover {
     background: linear-gradient(135deg, #6366f1, #818cf8) !important;
     transform: translateY(-1px) !important;
     box-shadow: 0 5px 18px rgba(99,102,241,0.3) !important;
 }
 
-/* Chat input */
+/* ── CHAT INPUT ── */
 .stChatInputContainer {
     background: rgba(8,10,22,0.9) !important;
     border: 1px solid rgba(99,102,241,0.15) !important;
     border-radius: 14px !important;
 }
-
 .stChatInputContainer:focus-within {
     border-color: rgba(99,102,241,0.4) !important;
     box-shadow: 0 0 0 3px rgba(99,102,241,0.07) !important;
 }
-
 .stChatInputContainer textarea {
     background: transparent !important;
     color: #e2e8f0 !important;
 }
 
-/* Chat messages */
+/* ── CHAT MESSAGES ── */
 div[data-testid="stChatMessage"] {
     background: transparent !important;
 }
 
+/* ── EXPANDER ── */
 div[data-testid="stExpander"] {
     background: rgba(8,10,22,0.5) !important;
     border: 1px solid rgba(255,255,255,0.04) !important;
     border-radius: 10px !important;
 }
 
-section[data-testid="stFileUploaderDropzone"] {
-    background: rgba(99,102,241,0.02) !important;
-    border: 2px dashed rgba(99,102,241,0.2) !important;
-    border-radius: 11px !important;
+/* ── SELECTBOX ── */
+div[data-testid="stSelectbox"] > div > div {
+    background: rgba(8,10,22,0.8) !important;
+    border: 1px solid rgba(99,102,241,0.14) !important;
+    border-radius: 9px !important;
 }
 
+/* ── PROGRESS ── */
 div[data-testid="stProgressBar"] > div > div {
     background: linear-gradient(90deg, #4f46e5, #06b6d4) !important;
     border-radius: 4px !important;
 }
 
+/* ── ALERTS ── */
 div[data-testid="stSuccess"] {
     background: rgba(16,185,129,0.07) !important;
     border: 1px solid rgba(16,185,129,0.2) !important;
     border-radius: 10px !important;
 }
-
 div[data-testid="stError"] {
     background: rgba(239,68,68,0.07) !important;
     border: 1px solid rgba(239,68,68,0.2) !important;
     border-radius: 10px !important;
 }
-
 div[data-testid="stInfo"] {
     background: rgba(99,102,241,0.06) !important;
     border: 1px solid rgba(99,102,241,0.15) !important;
     border-radius: 10px !important;
 }
 
+/* ── DOWNLOAD BUTTONS ── */
 div[data-testid="stDownloadButton"] > button {
     background: rgba(99,102,241,0.08) !important;
     border: 1px solid rgba(99,102,241,0.2) !important;
     color: #a5b4fc !important;
     box-shadow: none !important;
 }
-
 div[data-testid="stDownloadButton"] > button:hover {
     background: rgba(99,102,241,0.15) !important;
     transform: translateY(-1px) !important;
     box-shadow: none !important;
 }
 
+/* ── RADIO ── */
 div[data-testid="stRadio"] label {
     background: rgba(8,10,22,0.5) !important;
     border: 1px solid rgba(255,255,255,0.05) !important;
@@ -756,21 +784,16 @@ div[data-testid="stRadio"] label {
     color: #94a3b8 !important;
     transition: all 0.15s !important;
 }
-
 div[data-testid="stRadio"] label:hover {
     border-color: rgba(99,102,241,0.25) !important;
 }
 
-div[data-testid="stSelectbox"] > div > div {
-    background: rgba(8,10,22,0.8) !important;
-    border: 1px solid rgba(99,102,241,0.14) !important;
-    border-radius: 9px !important;
-}
-
+/* ── SPINNER ── */
 div[data-testid="stSpinner"] > div {
     border-top-color: #6366f1 !important;
 }
 
+/* ── SCROLLBAR ── */
 ::-webkit-scrollbar { width: 3px; height: 3px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(99,102,241,0.2); border-radius: 4px; }
@@ -790,29 +813,18 @@ SIDEBAR_CSS = """
     border-bottom: 1px solid rgba(99,102,241,0.08);
     margin-bottom: 18px;
 }
-
 .dm-icon-wrap {
     width: 38px;
     height: 38px;
-    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #06b6d4 100%);
+    background: linear-gradient(135deg, #4f46e5, #7c3aed, #06b6d4);
     border-radius: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 1.1rem;
-    box-shadow: 0 0 18px rgba(79,70,229,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
+    box-shadow: 0 0 18px rgba(79,70,229,0.4);
     flex-shrink: 0;
-    position: relative;
 }
-
-.dm-icon-wrap::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: 10px;
-    border: 1px solid rgba(255,255,255,0.1);
-}
-
 .dm-name-text {
     font-size: 1rem !important;
     font-weight: 700 !important;
@@ -820,7 +832,6 @@ SIDEBAR_CSS = """
     letter-spacing: -0.2px;
     line-height: 1.2;
 }
-
 .dm-sub-text {
     font-size: 0.58rem !important;
     color: rgba(99,102,241,0.75) !important;
@@ -828,7 +839,6 @@ SIDEBAR_CSS = """
     text-transform: uppercase;
     letter-spacing: 2px;
 }
-
 .sec-lbl {
     font-size: 0.58rem !important;
     font-weight: 700 !important;
@@ -838,7 +848,6 @@ SIDEBAR_CSS = """
     display: block !important;
     margin: 14px 0 8px !important;
 }
-
 .doc-card {
     background: rgba(99,102,241,0.06);
     border: 1px solid rgba(99,102,241,0.12);
@@ -846,7 +855,6 @@ SIDEBAR_CSS = """
     padding: 9px 12px;
     margin: 5px 0;
 }
-
 .doc-card-name {
     color: #a5b4fc !important;
     font-size: 0.79rem !important;
@@ -854,15 +862,12 @@ SIDEBAR_CSS = """
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 200px;
 }
-
 .doc-card-size {
     color: #3f4f6b !important;
     font-size: 0.67rem !important;
     margin-top: 2px;
 }
-
 .msg-c {
     background: rgba(99,102,241,0.05);
     border: 1px solid rgba(99,102,241,0.1);
@@ -871,7 +876,6 @@ SIDEBAR_CSS = """
     text-align: center;
     margin: 6px 0;
 }
-
 .mc-n {
     font-size: 1.8rem !important;
     font-weight: 800 !important;
@@ -882,7 +886,6 @@ SIDEBAR_CSS = """
     display: block !important;
     line-height: 1 !important;
 }
-
 .mc-l {
     font-size: 0.58rem !important;
     color: #3f4f6b !important;
