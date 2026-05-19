@@ -3,16 +3,18 @@ headless = true
 enableCORS = false
 enableXsrfProtection = false
 maxUploadSize = 2000
+runOnSave = false
 
 [browser]
 gatherUsageStats = false
 
 [runner]
 fastReruns = true
+enforceSerializationInDebugMode = false
 
 [theme]
 base = "dark"
-backgroundColor = "#0d1117"
-secondaryBackgroundColor = "#161b22"
-textColor = "#e6edf3"
-primaryColor = "#58a6ff"
+backgroundColor = "#04060f"
+secondaryBackgroundColor = "#080b18"
+textColor = "#e2e8f0"
+primaryColor = "#6366f1"
