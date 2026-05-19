@@ -4,8 +4,8 @@ from loguru import logger
 
 def chunk_text(
     text: str,
-    chunk_size: int = 800,
-    chunk_overlap: int = 100
+    chunk_size: int = 600,
+    chunk_overlap: int = 80
 ) -> list[str]:
     if not text or not text.strip():
         logger.warning("Empty text provided for chunking")
