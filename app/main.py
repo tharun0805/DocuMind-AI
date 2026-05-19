@@ -7,12 +7,13 @@ import streamlit.components.v1 as components
 import time
 import io
 import re
+import json
 from loguru import logger
 
 
 st.set_page_config(
     page_title="DocuMind AI",
-    page_icon="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><defs><linearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' stop-color='%234f46e5'/><stop offset='100%25' stop-color='%2306b6d4'/></linearGradient></defs><rect width='100' height='100' rx='22' fill='url(%23g)'/><text y='.9em' font-size='72' x='12'>🧠</text></svg>",
+    page_icon="🧠",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -44,9 +45,6 @@ def load_core():
 
 
 def get_llm(temp=0.3):
-    import os
-    from dotenv import load_dotenv
-    load_dotenv()
     groq_key = os.getenv("GROQ_API_KEY", "")
     if groq_key and groq_key not in ["your_groq_key_here", ""]:
         try:
@@ -82,10 +80,6 @@ def init(deps):
         "doc_ready": False,
         "doc_name": "",
         "doc_text": "",
-        "entities": {},
-        "insights": {},
-        "doc_map": [],
-        "quiz": [],
         "prompts": [],
         "answer_mode": "detailed",
         "multi_docs": [],
@@ -97,20 +91,17 @@ def init(deps):
             st.session_state[k] = v
 
 
-def detect_intent(question: str) -> dict:
-    q = question.lower()
+def detect_intent(q: str) -> dict:
+    ql = q.lower()
     return {
-        "wants_chart": any(w in q for w in ["chart", "graph", "plot", "visual", "diagram", "bar", "pie", "line", "show me", "graphical", "animate"]),
-        "wants_table": any(w in q for w in ["table", "tabular", "spreadsheet", "rows", "columns"]),
-        "wants_quiz": any(w in q for w in ["quiz", "test", "question", "mcq", "exam"]),
-        "wants_export": any(w in q for w in ["download", "export", "save", "generate file", "create pdf", "create doc", "make excel"]),
-        "wants_resources": any(w in q for w in ["resource", "learn", "youtube", "video", "website", "link", "reference", "more about", "study"]),
-        "wants_summary": any(w in q for w in ["summarize", "summary", "overview", "brief", "outline", "tldr"]),
-        "wants_entities": any(w in q for w in ["who", "people", "person", "organization", "company", "date", "location", "where", "when", "entities"]),
+        "chart": any(w in ql for w in ["chart", "graph", "plot", "visual", "bar", "pie", "line", "graphical", "diagram", "visualize", "show me data", "animate"]),
+        "quiz": any(w in ql for w in ["quiz", "test", "mcq", "exam", "question me", "ask me"]),
+        "export": any(w in ql for w in ["download", "export", "save", "generate file", "create pdf", "make pdf", "create doc", "make excel", "generate excel", "create csv"]),
+        "resources": True,
     }
 
 
-def gen_chart_auto(text: str, question: str):
+def gen_chart(doc_text: str, question: str):
     try:
         import plotly.express as px
         import plotly.graph_objects as go
@@ -119,83 +110,184 @@ def gen_chart_auto(text: str, question: str):
 
         prompt = PromptTemplate(
             input_variables=["text", "question"],
-            template="""Analyze this document and extract numerical/categorical data to create a meaningful chart for: {question}
+            template="""You are a data extraction expert. Extract numerical data from this document to create a chart for: {question}
 
-Document: {text}
+Document excerpt: {text}
 
-Return ONLY a valid Python dict. No explanation. No markdown. No backticks.
-Format: {{"labels": ["A","B","C"], "values": [10, 20, 30], "title": "Title Here", "type": "bar", "xlabel": "Category", "ylabel": "Count"}}
-type options: bar, pie, line, scatter
-Make the data meaningful and accurate from the document."""
+Return ONLY a valid JSON object. No explanation. No markdown. No code blocks.
+Example format: {{"labels": ["Category A", "Category B"], "values": [25, 75], "title": "Distribution", "type": "bar"}}
+- type must be one of: bar, pie, line
+- Extract real numbers from the document
+- If multiple charts possible, pick the most meaningful one
+- labels and values must have same length"""
         )
 
         llm = get_llm(temp=0)
-        result = (prompt | llm).invoke({"text": text[:3000], "question": question})
+        chain = prompt | llm
+        result = chain.invoke({"text": doc_text[:3000], "question": question})
         content = result.content.strip()
         content = re.sub(r"```[a-z]*", "", content).replace("```", "").strip()
 
-        data = eval(content)
+        try:
+            data = json.loads(content)
+        except Exception:
+            start = content.find("{")
+            end = content.rfind("}") + 1
+            if start >= 0 and end > start:
+                data = json.loads(content[start:end])
+            else:
+                return None
+
         labels = data.get("labels", [])
         values = data.get("values", [])
-        title = data.get("title", "Document Analysis")
-        chart_type = data.get("type", "bar")
-        xlabel = data.get("xlabel", "")
-        ylabel = data.get("ylabel", "")
+        title = data.get("title", "Document Data")
+        ctype = data.get("type", "bar")
 
-        if not labels or not values:
+        if not labels or not values or len(labels) != len(values):
             return None
 
-        df = pd.DataFrame({"Label": labels, "Value": values})
+        values = [float(v) for v in values]
+        df = pd.DataFrame({"Category": labels, "Value": values})
 
-        colors = ["#4f46e5", "#06b6d4", "#8b5cf6", "#10b981", "#f59e0b", "#ef4444", "#ec4899"]
+        COLORS = ["#6366f1", "#06b6d4", "#8b5cf6", "#10b981", "#f59e0b",
+                  "#ef4444", "#ec4899", "#14b8a6", "#f97316", "#84cc16"]
 
-        if chart_type == "pie":
-            fig = px.pie(
-                df, names="Label", values="Value", title=title,
-                color_discrete_sequence=colors,
-                hole=0.35
-            )
-            fig.update_traces(textposition="inside", textinfo="percent+label")
-        elif chart_type == "line":
-            fig = px.line(
-                df, x="Label", y="Value", title=title,
-                markers=True, color_discrete_sequence=["#4f46e5"],
-                labels={"Label": xlabel, "Value": ylabel}
-            )
-            fig.update_traces(line=dict(width=3), marker=dict(size=8))
-        elif chart_type == "scatter":
-            fig = px.scatter(
-                df, x="Label", y="Value", title=title,
-                color_discrete_sequence=["#4f46e5"],
-                labels={"Label": xlabel, "Value": ylabel}
-            )
-        else:
-            fig = px.bar(
-                df, x="Label", y="Value", title=title,
-                color="Label", color_discrete_sequence=colors,
-                labels={"Label": xlabel, "Value": ylabel}
-            )
-            fig.update_traces(marker_line_width=0)
-
-        fig.update_layout(
+        layout = dict(
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="#94a3b8", family="Inter"),
-            title=dict(font=dict(color="#e2e8f0", size=16, family="Inter"), x=0.5),
-            showlegend=chart_type == "pie",
-            xaxis=dict(gridcolor="rgba(255,255,255,0.05)", tickfont=dict(color="#64748b")),
-            yaxis=dict(gridcolor="rgba(255,255,255,0.05)", tickfont=dict(color="#64748b")),
-            margin=dict(t=60, b=40, l=40, r=40),
-            height=400
+            font=dict(color="#94a3b8", family="Sora, Inter, sans-serif", size=13),
+            title=dict(
+                text=title, font=dict(color="#e2e8f0", size=17),
+                x=0.5, xanchor="center"
+            ),
+            margin=dict(t=60, b=50, l=50, r=30),
+            height=420,
+            showlegend=ctype == "pie",
         )
 
+        if ctype == "pie":
+            fig = go.Figure(go.Pie(
+                labels=labels, values=values,
+                hole=0.4,
+                marker=dict(colors=COLORS[:len(labels)],
+                           line=dict(color="rgba(0,0,0,0.3)", width=2)),
+                textposition="inside",
+                textinfo="percent+label",
+                hovertemplate="<b>%{label}</b><br>Value: %{value}<br>%{percent}<extra></extra>"
+            ))
+        elif ctype == "line":
+            fig = go.Figure(go.Scatter(
+                x=labels, y=values,
+                mode="lines+markers",
+                line=dict(color="#6366f1", width=3),
+                marker=dict(size=9, color="#06b6d4",
+                           line=dict(color="#fff", width=2)),
+                fill="tozeroy",
+                fillcolor="rgba(99,102,241,0.08)",
+                hovertemplate="<b>%{x}</b><br>Value: %{y}<extra></extra>"
+            ))
+            layout["xaxis"] = dict(gridcolor="rgba(255,255,255,0.05)", tickfont=dict(color="#64748b"))
+            layout["yaxis"] = dict(gridcolor="rgba(255,255,255,0.05)", tickfont=dict(color="#64748b"))
+        else:
+            fig = go.Figure(go.Bar(
+                x=labels, y=values,
+                marker=dict(
+                    color=COLORS[:len(labels)],
+                    line=dict(color="rgba(0,0,0,0)", width=0),
+                    cornerradius=6,
+                ),
+                hovertemplate="<b>%{x}</b><br>Value: %{y}<extra></extra>"
+            ))
+            layout["xaxis"] = dict(gridcolor="rgba(255,255,255,0.03)", tickfont=dict(color="#64748b"))
+            layout["yaxis"] = dict(gridcolor="rgba(255,255,255,0.05)", tickfont=dict(color="#64748b"))
+            layout["bargap"] = 0.3
+
+        fig.update_layout(**layout)
         return fig
+
     except Exception as e:
-        logger.error(f"Chart generation error: {e}")
+        logger.error(f"Chart error: {e}")
         return None
 
 
-def gen_quiz_auto(text: str) -> list:
+def gen_multiple_charts(doc_text: str, question: str):
+    try:
+        import plotly.express as px
+        import plotly.graph_objects as go
+        from plotly.subplots import make_subplots
+        import pandas as pd
+        from langchain_core.prompts import PromptTemplate
+
+        prompt = PromptTemplate(
+            input_variables=["text", "question"],
+            template="""Extract data for up to 3 different meaningful charts from this document for: {question}
+
+Document: {text}
+
+Return ONLY valid JSON array. No markdown. No explanation.
+Format: [{{"labels": ["A","B"], "values": [1,2], "title": "Chart 1", "type": "bar"}}, ...]
+Types: bar, pie, line. Maximum 3 charts."""
+        )
+
+        llm = get_llm(temp=0)
+        result = (prompt | llm).invoke({"text": doc_text[:3000], "question": question})
+        content = result.content.strip()
+        content = re.sub(r"```[a-z]*", "", content).replace("```", "").strip()
+
+        start = content.find("[")
+        end = content.rfind("]") + 1
+        if start < 0:
+            return []
+
+        charts_data = json.loads(content[start:end])
+        figs = []
+        for cd in charts_data[:3]:
+            labels = cd.get("labels", [])
+            values = cd.get("values", [])
+            if labels and values and len(labels) == len(values):
+                fig = gen_chart_from_data(labels, [float(v) for v in values], cd.get("title", ""), cd.get("type", "bar"))
+                if fig:
+                    figs.append((cd.get("title", "Chart"), fig))
+        return figs
+    except Exception as e:
+        logger.error(f"Multi-chart error: {e}")
+        return []
+
+
+def gen_chart_from_data(labels, values, title, ctype):
+    try:
+        import plotly.graph_objects as go
+        COLORS = ["#6366f1", "#06b6d4", "#8b5cf6", "#10b981", "#f59e0b", "#ef4444", "#ec4899"]
+        layout = dict(
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#94a3b8", family="Inter, sans-serif", size=12),
+            title=dict(text=title, font=dict(color="#e2e8f0", size=15), x=0.5),
+            margin=dict(t=55, b=45, l=45, r=25), height=350,
+            showlegend=ctype == "pie",
+        )
+        if ctype == "pie":
+            fig = go.Figure(go.Pie(labels=labels, values=values, hole=0.38,
+                marker=dict(colors=COLORS[:len(labels)], line=dict(color="rgba(0,0,0,0.3)", width=2)),
+                textinfo="percent+label"))
+        elif ctype == "line":
+            fig = go.Figure(go.Scatter(x=labels, y=values, mode="lines+markers",
+                line=dict(color="#6366f1", width=2.5), marker=dict(size=8, color="#06b6d4"),
+                fill="tozeroy", fillcolor="rgba(99,102,241,0.06)"))
+            layout["xaxis"] = dict(gridcolor="rgba(255,255,255,0.04)")
+            layout["yaxis"] = dict(gridcolor="rgba(255,255,255,0.04)")
+        else:
+            fig = go.Figure(go.Bar(x=labels, y=values,
+                marker=dict(color=COLORS[:len(labels)], cornerradius=5)))
+            layout["xaxis"] = dict(gridcolor="rgba(255,255,255,0.03)")
+            layout["yaxis"] = dict(gridcolor="rgba(255,255,255,0.04)")
+            layout["bargap"] = 0.28
+        fig.update_layout(**layout)
+        return fig
+    except Exception:
+        return None
+
+
+def gen_quiz(text: str) -> list:
     try:
         from langchain_core.prompts import PromptTemplate
         prompt = PromptTemplate(
@@ -204,11 +296,11 @@ def gen_quiz_auto(text: str) -> list:
 
 Document: {text}
 
-Use EXACTLY this format for each question (blank line between questions):
+Use EXACTLY this format (blank line between questions):
 Q: [question text]
 A: [correct answer]
 B: [wrong option]
-C: [wrong option]  
+C: [wrong option]
 D: [wrong option]
 ANSWER: A"""
         )
@@ -222,7 +314,7 @@ ANSWER: A"""
             for line in lines:
                 if line.startswith("Q:"):
                     q["question"] = line[2:].strip()
-                elif line[:2] in ["A:", "B:", "C:", "D:"]:
+                elif len(line) > 2 and line[1] == ":" and line[0] in "ABCD":
                     opts.append((line[0], line[2:].strip()))
                 elif line.startswith("ANSWER:"):
                     q["answer"] = line[7:].strip()
@@ -234,43 +326,29 @@ ANSWER: A"""
         return []
 
 
-def gen_resources_auto(question: str, answer: str) -> dict:
+def gen_resources(question: str, answer: str) -> dict:
     try:
         from langchain_core.prompts import PromptTemplate
         prompt = PromptTemplate(
             input_variables=["question", "answer"],
-            template="""Based on this Q&A suggest learning resources.
+            template="""Based on this Q&A generate specific learning resources.
 Q: {question}
 A: {answer}
 
-YOUTUBE: [3 specific YouTube search queries, one per line]
-TOPICS: [3 related topics to explore, one per line]
-SCHOLAR: [2 academic search terms, one per line]"""
+Return ONLY JSON. No explanation.
+{{"youtube": ["specific search 1", "specific search 2", "specific search 3"],
+  "websites": ["topic 1 to Google", "topic 2 to Google"],
+  "academic": ["scholar search term 1"]}}"""
         )
-        llm = get_llm(temp=0.3)
-        result = (prompt | llm).invoke({"question": question, "answer": answer})
+        llm = get_llm(temp=0.2)
+        result = (prompt | llm).invoke({"question": question, "answer": answer[:500]})
         content = result.content.strip()
-        out = {}
-        current = None
-        items = []
-        for line in content.split("\n"):
-            line = line.strip()
-            if not line:
-                continue
-            for key in ["YOUTUBE", "TOPICS", "SCHOLAR"]:
-                if line.startswith(key + ":"):
-                    if current:
-                        out[current] = items
-                    current = key
-                    rest = line[len(key)+1:].strip()
-                    items = [rest] if rest else []
-                    break
-            else:
-                if current and line:
-                    items.append(line)
-        if current:
-            out[current] = items
-        return out
+        content = re.sub(r"```[a-z]*", "", content).replace("```", "").strip()
+        start = content.find("{")
+        end = content.rfind("}") + 1
+        if start >= 0:
+            return json.loads(content[start:end])
+        return {}
     except Exception:
         return {}
 
@@ -281,13 +359,13 @@ def gen_file(content: str, fmt: str) -> bytes:
     elif fmt == "docx":
         from docx import Document
         doc = Document()
-        doc.add_heading("DocuMind AI", 0)
+        doc.add_heading("DocuMind AI — Generated Report", 0)
         for line in content.split("\n"):
             if line.strip():
-                if line.startswith("# "):
-                    doc.add_heading(line[2:], 1)
-                elif line.startswith("## "):
+                if line.startswith("## "):
                     doc.add_heading(line[3:], 2)
+                elif line.startswith("# "):
+                    doc.add_heading(line[2:], 1)
                 else:
                     doc.add_paragraph(line)
         buf = io.BytesIO()
@@ -304,8 +382,11 @@ def gen_file(content: str, fmt: str) -> bytes:
             story = []
             for line in content.split("\n"):
                 if line.strip():
-                    story.append(Paragraph(line.replace("<", "&lt;").replace(">", "&gt;"), styles["Normal"]))
-                    story.append(Spacer(1, 6))
+                    story.append(Paragraph(
+                        line.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"),
+                        styles["Normal"]
+                    ))
+                    story.append(Spacer(1, 5))
             doc.build(story)
             return buf.getvalue()
         except Exception:
@@ -320,20 +401,20 @@ def gen_file(content: str, fmt: str) -> bytes:
         lines = [l.strip() for l in content.split("\n") if l.strip()]
         df = pd.DataFrame({"Content": lines})
         buf = io.BytesIO()
-        df.to_excel(buf, index=False)
+        df.to_excel(buf, index=False, engine="openpyxl")
         return buf.getvalue()
     return content.encode("utf-8")
 
 
 def tts_html(text: str) -> str:
-    clean = text[:500].replace('"', "").replace("'", "").replace("\n", " ")
+    clean = text[:500].replace('"', "").replace("'", "").replace("\n", " ").replace("<", "").replace(">", "")
     return f"""<script>
-function dmS(){{window.speechSynthesis.cancel();var u=new SpeechSynthesisUtterance("{clean}");u.rate=0.92;u.pitch=1;window.speechSynthesis.speak(u);}}
+function dmS(){{window.speechSynthesis.cancel();var u=new SpeechSynthesisUtterance("{clean}");u.rate=0.9;u.pitch=1;u.volume=1;window.speechSynthesis.speak(u);}}
 function dmX(){{window.speechSynthesis.cancel();}}
 </script>
-<div style="display:flex;gap:8px;margin-top:8px;">
-<button onclick="dmS()" style="background:rgba(79,70,229,0.12);border:1px solid rgba(79,70,229,0.25);border-radius:7px;color:#a5b4fc;padding:5px 13px;font-size:0.73rem;cursor:pointer;font-family:Inter,sans-serif;font-weight:600;transition:all 0.2s;">🔊 Read Aloud</button>
-<button onclick="dmX()" style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.18);border-radius:7px;color:#fca5a5;padding:5px 13px;font-size:0.73rem;cursor:pointer;font-family:Inter,sans-serif;font-weight:600;">⏹ Stop</button>
+<div style="display:flex;gap:8px;margin-top:10px;align-items:center;">
+<button onclick="dmS()" style="background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.2);border-radius:8px;color:#a5b4fc;padding:6px 14px;font-size:0.74rem;cursor:pointer;font-family:Inter,sans-serif;font-weight:600;transition:all 0.2s;">🔊 Read Aloud</button>
+<button onclick="dmX()" style="background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.15);border-radius:8px;color:#fca5a5;padding:6px 14px;font-size:0.74rem;cursor:pointer;font-family:Inter,sans-serif;font-weight:600;">⏹ Stop</button>
 </div>"""
 
 
@@ -342,9 +423,9 @@ def gen_prompts(text: str) -> list:
         from langchain_core.prompts import PromptTemplate
         prompt = PromptTemplate(
             input_variables=["text"],
-            template="""Generate exactly 6 specific interesting questions a user would ask about this document.
+            template="""Generate 6 specific interesting questions a user would ask about this document.
 Document: {text}
-Rules: specific to content, mix factual/analytical/summary, under 10 words each, one per line, no numbering, no bullets.
+Rules: specific to content, mix factual/analytical/summary, under 10 words each, one per line, no numbering.
 Questions:"""
         )
         llm = get_llm(temp=0.5)
@@ -373,21 +454,21 @@ def process_doc(f, deps) -> bool:
         st.session_state.file_path = tmp_path
         st.session_state.doc_name = f.name
 
-        pb = st.progress(0, "📖 Reading...")
+        pb = st.progress(0, "📖 Reading document...")
         text = deps["load_document"](tmp_path)
         st.session_state.doc_text = text
 
         pb.progress(35, "✂️ Chunking...")
         chunks = deps["chunk_text"](text)
 
-        pb.progress(62, "🔢 Indexing...")
+        pb.progress(65, "🔢 Building search index...")
         deps["create_vector_store"](chunks)
         deps["create_bm25_index"](chunks)
 
-        pb.progress(88, "💡 Generating prompts...")
+        pb.progress(88, "💡 Generating smart prompts...")
         st.session_state.prompts = gen_prompts(text)
 
-        pb.progress(100, "✅ Ready")
+        pb.progress(100, "✅ Ready!")
         time.sleep(0.2)
         pb.empty()
 
@@ -413,7 +494,44 @@ def show_msg(role, content, tts=False):
         with st.chat_message("assistant", avatar="🧠"):
             st.markdown(content)
             if tts:
-                components.html(tts_html(content), height=48)
+                components.html(tts_html(content), height=52)
+
+
+def show_resources_section(question: str, answer: str):
+    with st.spinner("🌐 Finding related resources..."):
+        k = gen_resources(question, answer)
+
+    if not k:
+        return
+
+    st.markdown("""
+    <div style='margin-top:20px;padding:16px 0 8px;border-top:1px solid rgba(99,102,241,0.1);'>
+        <span style='font-size:0.7rem;font-weight:700;color:rgba(99,102,241,0.7);text-transform:uppercase;letter-spacing:2px;'>Related Resources</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+    c1, c2, c3 = st.columns(3)
+
+    with c1:
+        if k.get("youtube"):
+            st.markdown("<span style='font-size:0.75rem;font-weight:700;color:#fca5a5;'>📺 YouTube</span>", unsafe_allow_html=True)
+            for s in k["youtube"][:3]:
+                url = f"https://www.youtube.com/results?search_query={s.strip().replace(' ', '+')}"
+                st.markdown(f"<div style='background:rgba(239,68,68,0.05);border:1px solid rgba(239,68,68,0.1);border-radius:8px;padding:8px 12px;margin:5px 0;'><a href='{url}' target='_blank' style='color:#fca5a5;text-decoration:none;font-size:0.78rem;font-weight:500;'>▶ {s}</a></div>", unsafe_allow_html=True)
+
+    with c2:
+        if k.get("websites"):
+            st.markdown("<span style='font-size:0.75rem;font-weight:700;color:#a5b4fc;'>🔍 Web Search</span>", unsafe_allow_html=True)
+            for t in k["websites"][:3]:
+                url = f"https://www.google.com/search?q={t.strip().replace(' ', '+')}"
+                st.markdown(f"<div style='background:rgba(99,102,241,0.05);border:1px solid rgba(99,102,241,0.1);border-radius:8px;padding:8px 12px;margin:5px 0;'><a href='{url}' target='_blank' style='color:#a5b4fc;text-decoration:none;font-size:0.78rem;font-weight:500;'>🔗 {t}</a></div>", unsafe_allow_html=True)
+
+    with c3:
+        if k.get("academic"):
+            st.markdown("<span style='font-size:0.75rem;font-weight:700;color:#67e8f9;'>🎓 Academic</span>", unsafe_allow_html=True)
+            for s in k["academic"][:2]:
+                url = f"https://scholar.google.com/scholar?q={s.strip().replace(' ', '+')}"
+                st.markdown(f"<div style='background:rgba(6,182,212,0.04);border:1px solid rgba(6,182,212,0.1);border-radius:8px;padding:8px 12px;margin:5px 0;'><a href='{url}' target='_blank' style='color:#67e8f9;text-decoration:none;font-size:0.78rem;font-weight:500;'>📖 {s}</a></div>", unsafe_allow_html=True)
 
 
 def answer_q(question: str, deps):
@@ -423,11 +541,10 @@ def answer_q(question: str, deps):
         return
 
     intent = detect_intent(question)
-
     show_msg("human", question)
     st.session_state.chat.append({"role": "human", "content": question})
 
-    with st.spinner("🧠 Analysing..."):
+    with st.spinner("🧠 Thinking..."):
         try:
             result = deps["run_workflow"](
                 question=question,
@@ -446,159 +563,423 @@ def answer_q(question: str, deps):
     if evidence:
         with st.expander("📎 Evidence Sources"):
             for i, chunk in enumerate(evidence, 1):
-                st.markdown(
-                    f"<div style='background:rgba(79,70,229,0.05);border-left:2px solid rgba(79,70,229,0.4);border-radius:0 8px 8px 0;padding:9px 13px;margin:6px 0;font-size:0.79rem;color:#64748b;line-height:1.55;'><strong style='color:#a5b4fc;'>Source {i}</strong><br>{chunk}</div>",
-                    unsafe_allow_html=True
-                )
+                st.markdown(f"<div style='background:rgba(99,102,241,0.04);border-left:2px solid rgba(99,102,241,0.3);border-radius:0 8px 8px 0;padding:9px 13px;margin:6px 0;font-size:0.79rem;color:#64748b;line-height:1.55;'><strong style='color:#a5b4fc;'>Source {i}</strong><br>{chunk}</div>", unsafe_allow_html=True)
 
     st.session_state.chat.append({"role": "assistant", "content": answer})
     st.session_state.last_q = question
     st.session_state.last_a = answer
 
-    if intent["wants_chart"]:
-        with st.spinner("📊 Generating chart..."):
-            fig = gen_chart_auto(st.session_state.doc_text, question)
-        if fig:
-            st.plotly_chart(fig, use_container_width=True)
+    if intent["chart"]:
+        with st.spinner("📊 Generating charts from document data..."):
+            charts = gen_multiple_charts(st.session_state.doc_text, question)
+        if charts:
+            if len(charts) == 1:
+                st.plotly_chart(charts[0][1], use_container_width=True)
+            else:
+                cols = st.columns(min(len(charts), 2))
+                for i, (title, fig) in enumerate(charts):
+                    with cols[i % 2]:
+                        st.plotly_chart(fig, use_container_width=True)
         else:
-            st.info("Could not extract numerical data for a chart from this document.")
+            single = gen_chart(st.session_state.doc_text, question)
+            if single:
+                st.plotly_chart(single, use_container_width=True)
+            else:
+                st.info("ℹ️ Could not extract numerical data for charts from this document. Try asking a more specific question like 'show me the scores as a bar chart'.")
 
-    if intent["wants_quiz"]:
+    if intent["quiz"]:
         with st.spinner("🧩 Generating quiz..."):
-            quiz = gen_quiz_auto(st.session_state.doc_text)
+            quiz = gen_quiz(st.session_state.doc_text)
         if quiz:
-            st.markdown("### 🧩 Quiz")
+            st.markdown("### 🧩 Document Quiz")
             for i, q in enumerate(quiz, 1):
-                st.markdown(
-                    f"<div style='background:rgba(139,92,246,0.05);border:1px solid rgba(139,92,246,0.12);border-radius:12px;padding:16px;margin-bottom:12px;'><div style='color:#e2e8f0;font-size:0.88rem;font-weight:600;margin-bottom:10px;'>Q{i}. {q['question']}</div></div>",
-                    unsafe_allow_html=True
-                )
+                st.markdown(f"<div style='background:rgba(139,92,246,0.05);border:1px solid rgba(139,92,246,0.12);border-radius:12px;padding:16px;margin-bottom:12px;'><div style='color:#e2e8f0;font-size:0.88rem;font-weight:600;margin-bottom:10px;'>Q{i}. {q['question']}</div></div>", unsafe_allow_html=True)
                 if q.get("options"):
-                    user = st.radio(f"Q{i}", [f"{o[0]}. {o[1]}" for o in q["options"]], key=f"qr{i}_{len(st.session_state.chat)}", label_visibility="collapsed")
+                    user = st.radio(
+                        f"Q{i}",
+                        [f"{o[0]}. {o[1]}" for o in q["options"]],
+                        key=f"qr{i}_{len(st.session_state.chat)}",
+                        label_visibility="collapsed"
+                    )
                     if st.button(f"Check Q{i}", key=f"qc{i}_{len(st.session_state.chat)}"):
                         correct = q.get("answer", "A")
                         if user and user.startswith(correct):
                             st.success("✅ Correct!")
                         else:
                             ct = next((f"{o[0]}. {o[1]}" for o in q["options"] if o[0] == correct), correct)
-                            st.error(f"❌ Correct: {ct}")
+                            st.error(f"❌ Correct answer: {ct}")
 
-    if intent["wants_resources"] or intent["wants_chart"] or intent["wants_summary"]:
-        with st.spinner("🌐 Finding resources..."):
-            k = gen_resources_auto(question, answer)
-        if k:
-            st.markdown("### 🌐 Related Resources")
-            c1, c2 = st.columns(2)
-            with c1:
-                if k.get("YOUTUBE"):
-                    st.markdown("**📺 YouTube**")
-                    for s in k["YOUTUBE"]:
-                        url = f"https://www.youtube.com/results?search_query={s.strip().replace(' ', '+')}"
-                        st.markdown(
-                            f"<div style='background:rgba(239,68,68,0.05);border:1px solid rgba(239,68,68,0.12);border-radius:9px;padding:10px 13px;margin-bottom:7px;transition:all 0.2s;'><a href='{url}' target='_blank' style='color:#fca5a5;text-decoration:none;font-size:0.82rem;font-weight:500;'>▶ {s}</a></div>",
-                            unsafe_allow_html=True
-                        )
-            with c2:
-                if k.get("TOPICS"):
-                    st.markdown("**🔗 Explore More**")
-                    for t in k["TOPICS"]:
-                        url = f"https://www.google.com/search?q={t.strip().replace(' ', '+')}"
-                        st.markdown(
-                            f"<div style='background:rgba(79,70,229,0.05);border:1px solid rgba(79,70,229,0.1);border-radius:9px;padding:10px 13px;margin-bottom:7px;'><a href='{url}' target='_blank' style='color:#a5b4fc;text-decoration:none;font-size:0.82rem;font-weight:500;'>🔍 {t}</a></div>",
-                            unsafe_allow_html=True
-                        )
-                if k.get("SCHOLAR"):
-                    st.markdown("**🎓 Academic**")
-                    for s in k["SCHOLAR"]:
-                        url = f"https://scholar.google.com/scholar?q={s.strip().replace(' ', '+')}"
-                        st.markdown(
-                            f"<div style='background:rgba(6,182,212,0.04);border:1px solid rgba(6,182,212,0.1);border-radius:9px;padding:10px 13px;margin-bottom:7px;'><a href='{url}' target='_blank' style='color:#67e8f9;text-decoration:none;font-size:0.82rem;font-weight:500;'>📖 {s}</a></div>",
-                            unsafe_allow_html=True
-                        )
-
-    if intent["wants_export"]:
+    if intent["export"]:
         st.markdown("### 📥 Export Answer")
-        cols = st.columns(5)
+        ecols = st.columns(5)
         for i, (fmt, label, mime) in enumerate([
             ("txt", "TXT", "text/plain"),
             ("docx", "DOCX", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
             ("pdf", "PDF", "application/pdf"),
             ("csv", "CSV", "text/csv"),
-            ("xlsx", "XLSX", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+            ("xlsx", "Excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
         ]):
-            with cols[i]:
+            with ecols[i]:
                 fb = gen_file(answer, fmt)
                 st.download_button(
                     f"📥 {label}",
                     data=fb,
-                    file_name=f"answer.{fmt}",
+                    file_name=f"documind_answer.{fmt}",
                     mime=mime,
                     use_container_width=True,
                     key=f"dl_{fmt}_{len(st.session_state.chat)}"
                 )
 
-    if intent["wants_entities"]:
-        with st.spinner("🔍 Extracting entities..."):
-            fn = lazy("agents.entity_agent", "extract_entities")
-            entities = fn(st.session_state.doc_text[:3000])
-        if entities:
-            st.markdown("### 📊 Entities Found")
-            icons = {"PEOPLE": "👤", "ORGANIZATIONS": "🏢", "DATES": "📅", "LOCATIONS": "📍", "KEY_TERMS": "🔑"}
-            for et, vals in entities.items():
-                if vals:
-                    ic = icons.get(et, "•")
-                    st.markdown(f"**{ic} {et}**")
-                    tags = "".join([f"<span style='display:inline-block;background:rgba(6,182,212,0.07);border:1px solid rgba(6,182,212,0.15);border-radius:6px;padding:3px 10px;margin:3px;font-size:0.76rem;color:#22d3ee;'>{v}</span>" for v in vals])
-                    st.markdown(tags, unsafe_allow_html=True)
-                    st.markdown("")
+    show_resources_section(question, answer)
+
+
+HERO_HTML = """
+<div style="
+    min-height: 94vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 60px 24px;
+    position: relative;
+">
+    <div style="
+        position: absolute; inset: 0;
+        background:
+            radial-gradient(ellipse 55% 45% at 20% 25%, rgba(99,102,241,0.1) 0%, transparent 55%),
+            radial-gradient(ellipse 45% 35% at 80% 70%, rgba(6,182,212,0.07) 0%, transparent 55%),
+            radial-gradient(ellipse 35% 55% at 55% 50%, rgba(139,92,246,0.05) 0%, transparent 60%);
+        pointer-events: none;
+    "></div>
+
+    <div style="
+        display: inline-flex; align-items: center; gap: 8px;
+        background: rgba(99,102,241,0.07);
+        border: 1px solid rgba(99,102,241,0.18);
+        border-radius: 100px;
+        padding: 7px 20px;
+        font-size: 0.65rem;
+        font-weight: 700;
+        color: #818cf8;
+        letter-spacing: 2.5px;
+        text-transform: uppercase;
+        margin-bottom: 28px;
+        position: relative;
+    ">
+        <div style="width:5px;height:5px;background:#22c55e;border-radius:50%;animation:blink 2s ease infinite;"></div>
+        Enterprise Document Intelligence
+    </div>
+
+    <div style="
+        font-size: clamp(2.8rem, 7vw, 5rem);
+        font-weight: 900;
+        letter-spacing: -3px;
+        line-height: 1;
+        margin-bottom: 20px;
+        background: linear-gradient(135deg, #ffffff 0%, #a5b4fc 30%, #06b6d4 65%, #ffffff 100%);
+        background-size: 300% auto;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        animation: titleflow 8s linear infinite;
+        position: relative;
+    ">DocuMind AI</div>
+
+    <div style="
+        font-size: 1.05rem;
+        color: #475569;
+        max-width: 500px;
+        line-height: 1.8;
+        margin: 0 auto 48px;
+        font-weight: 400;
+        position: relative;
+    ">
+        Upload any document. Ask in plain English.<br>
+        Get answers, charts, quizzes, and knowledge — instantly.
+    </div>
+
+    <div style="
+        display: flex; gap: 0;
+        border: 1px solid rgba(255,255,255,0.05);
+        border-radius: 14px; overflow: hidden;
+        max-width: 580px; margin: 0 auto 64px;
+        background: rgba(8,10,22,0.7);
+        backdrop-filter: blur(20px);
+        position: relative;
+    ">
+        <div style="flex:1;padding:18px 12px;text-align:center;border-right:1px solid rgba(255,255,255,0.05);">
+            <div style="font-size:1.4rem;font-weight:800;background:linear-gradient(135deg,#a5b4fc,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">6+</div>
+            <div style="font-size:0.6rem;color:#334155;text-transform:uppercase;letter-spacing:1.5px;margin-top:3px;">Formats</div>
+        </div>
+        <div style="flex:1;padding:18px 12px;text-align:center;border-right:1px solid rgba(255,255,255,0.05);">
+            <div style="font-size:1.4rem;font-weight:800;background:linear-gradient(135deg,#a5b4fc,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">5</div>
+            <div style="font-size:0.6rem;color:#334155;text-transform:uppercase;letter-spacing:1.5px;margin-top:3px;">AI Agents</div>
+        </div>
+        <div style="flex:1;padding:18px 12px;text-align:center;border-right:1px solid rgba(255,255,255,0.05);">
+            <div style="font-size:1.4rem;font-weight:800;background:linear-gradient(135deg,#a5b4fc,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">20+</div>
+            <div style="font-size:0.6rem;color:#334155;text-transform:uppercase;letter-spacing:1.5px;margin-top:3px;">Features</div>
+        </div>
+        <div style="flex:1;padding:18px 12px;text-align:center;">
+            <div style="font-size:1.4rem;font-weight:800;background:linear-gradient(135deg,#a5b4fc,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">100%</div>
+            <div style="font-size:0.6rem;color:#334155;text-transform:uppercase;letter-spacing:1.5px;margin-top:3px;">Private</div>
+        </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;max-width:860px;margin:0 auto;position:relative;">
+        <div style="background:rgba(8,10,22,0.7);border:1px solid rgba(255,255,255,0.04);border-radius:13px;padding:18px 14px;text-align:left;transition:all 0.25s;">
+            <span style="font-size:1.4rem;display:block;margin-bottom:8px;">📊</span>
+            <div style="color:#cbd5e1;font-size:0.82rem;font-weight:600;margin-bottom:3px;">Auto Charts</div>
+            <div style="color:#334155;font-size:0.71rem;line-height:1.5;">Ask for a chart — real Plotly graphs generated instantly</div>
+        </div>
+        <div style="background:rgba(8,10,22,0.7);border:1px solid rgba(255,255,255,0.04);border-radius:13px;padding:18px 14px;text-align:left;">
+            <span style="font-size:1.4rem;display:block;margin-bottom:8px;">🧩</span>
+            <div style="color:#cbd5e1;font-size:0.82rem;font-weight:600;margin-bottom:3px;">Quiz Mode</div>
+            <div style="color:#334155;font-size:0.71rem;line-height:1.5;">Ask for a quiz — MCQ questions from document</div>
+        </div>
+        <div style="background:rgba(8,10,22,0.7);border:1px solid rgba(255,255,255,0.04);border-radius:13px;padding:18px 14px;text-align:left;">
+            <span style="font-size:1.4rem;display:block;margin-bottom:8px;">🔊</span>
+            <div style="color:#cbd5e1;font-size:0.82rem;font-weight:600;margin-bottom:3px;">Read Aloud</div>
+            <div style="color:#334155;font-size:0.71rem;line-height:1.5;">Browser text-to-speech on every answer</div>
+        </div>
+        <div style="background:rgba(8,10,22,0.7);border:1px solid rgba(255,255,255,0.04);border-radius:13px;padding:18px 14px;text-align:left;">
+            <span style="font-size:1.4rem;display:block;margin-bottom:8px;">🌐</span>
+            <div style="color:#cbd5e1;font-size:0.82rem;font-weight:600;margin-bottom:3px;">Live Resources</div>
+            <div style="color:#334155;font-size:0.71rem;line-height:1.5;">YouTube + Google + Scholar links after every answer</div>
+        </div>
+        <div style="background:rgba(8,10,22,0.7);border:1px solid rgba(255,255,255,0.04);border-radius:13px;padding:18px 14px;text-align:left;">
+            <span style="font-size:1.4rem;display:block;margin-bottom:8px;">📥</span>
+            <div style="color:#cbd5e1;font-size:0.82rem;font-weight:600;margin-bottom:3px;">Export Anything</div>
+            <div style="color:#334155;font-size:0.71rem;line-height:1.5;">PDF, DOCX, Excel, CSV — ask to download</div>
+        </div>
+        <div style="background:rgba(8,10,22,0.7);border:1px solid rgba(255,255,255,0.04);border-radius:13px;padding:18px 14px;text-align:left;">
+            <span style="font-size:1.4rem;display:block;margin-bottom:8px;">💡</span>
+            <div style="color:#cbd5e1;font-size:0.82rem;font-weight:600;margin-bottom:3px;">Smart Prompts</div>
+            <div style="color:#334155;font-size:0.71rem;line-height:1.5;">Auto-generated questions from your document</div>
+        </div>
+        <div style="background:rgba(8,10,22,0.7);border:1px solid rgba(255,255,255,0.04);border-radius:13px;padding:18px 14px;text-align:left;">
+            <span style="font-size:1.4rem;display:block;margin-bottom:8px;">🔍</span>
+            <div style="color:#cbd5e1;font-size:0.82rem;font-weight:600;margin-bottom:3px;">Hybrid Search</div>
+            <div style="color:#334155;font-size:0.71rem;line-height:1.5;">FAISS semantic + BM25 keyword with RRF</div>
+        </div>
+        <div style="background:rgba(8,10,22,0.7);border:1px solid rgba(255,255,255,0.04);border-radius:13px;padding:18px 14px;text-align:left;">
+            <span style="font-size:1.4rem;display:block;margin-bottom:8px;">🔒</span>
+            <div style="color:#cbd5e1;font-size:0.82rem;font-weight:600;margin-bottom:3px;">100% Private</div>
+            <div style="color:#334155;font-size:0.71rem;line-height:1.5;">Documents never leave your machine</div>
+        </div>
+    </div>
+</div>
+
+<style>
+@keyframes blink{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.3;transform:scale(0.75);}}
+@keyframes titleflow{0%{background-position:0% center;}100%{background-position:300% center;}}
+</style>
+"""
 
 
 CSS = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 
-*, *::before, *::after {
-    font-family: 'Sora', sans-serif;
+html, body, [class*="css"], * {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
     box-sizing: border-box;
 }
 
 .stApp {
-    background: #04060f;
-}
-
-.stApp::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background:
-        radial-gradient(ellipse 60% 50% at 15% 20%, rgba(79,70,229,0.08) 0%, transparent 55%),
-        radial-gradient(ellipse 50% 40% at 85% 75%, rgba(6,182,212,0.06) 0%, transparent 55%),
-        radial-gradient(ellipse 30% 30% at 50% 50%, rgba(139,92,246,0.04) 0%, transparent 60%);
-    pointer-events: none;
-    z-index: 0;
+    background: #04060f !important;
+    min-height: 100vh;
 }
 
 section[data-testid="stSidebar"] {
-    background: rgba(4,6,15,0.98) !important;
-    border-right: 1px solid rgba(79,70,229,0.08) !important;
-    width: 272px !important;
+    background: rgba(4,6,15,0.99) !important;
+    border-right: 1px solid rgba(99,102,241,0.08) !important;
 }
 
-section[data-testid="stSidebar"] * { color: #94a3b8 !important; }
-
-.dm-logo-wrap {
-    padding: 22px 0 20px;
-    border-bottom: 1px solid rgba(79,70,229,0.08);
-    margin-bottom: 20px;
+section[data-testid="stSidebar"] > div {
+    background: transparent !important;
 }
 
-.dm-logo-inner {
+section[data-testid="stSidebar"] * {
+    color: #94a3b8 !important;
+}
+
+/* Buttons */
+.stButton > button {
+    background: linear-gradient(135deg, #4f46e5, #6366f1) !important;
+    color: #ffffff !important;
+    border: none !important;
+    border-radius: 9px !important;
+    font-weight: 600 !important;
+    font-size: 0.8rem !important;
+    padding: 8px 16px !important;
+    transition: all 0.2s ease !important;
+    box-shadow: 0 2px 10px rgba(79,70,229,0.2) !important;
+    letter-spacing: 0.1px !important;
+}
+
+.stButton > button:hover {
+    background: linear-gradient(135deg, #6366f1, #818cf8) !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 5px 18px rgba(99,102,241,0.3) !important;
+}
+
+/* Chat input */
+.stChatInputContainer {
+    background: rgba(8,10,22,0.9) !important;
+    border: 1px solid rgba(99,102,241,0.15) !important;
+    border-radius: 14px !important;
+}
+
+.stChatInputContainer:focus-within {
+    border-color: rgba(99,102,241,0.35) !important;
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.06) !important;
+}
+
+.stChatInputContainer textarea {
+    background: transparent !important;
+    color: #e2e8f0 !important;
+}
+
+/* Chat messages */
+div[data-testid="stChatMessage"] {
+    background: transparent !important;
+    border: none !important;
+}
+
+/* Expander */
+div[data-testid="stExpander"] {
+    background: rgba(8,10,22,0.5) !important;
+    border: 1px solid rgba(255,255,255,0.04) !important;
+    border-radius: 10px !important;
+}
+
+/* Selectbox */
+div[data-testid="stSelectbox"] > div > div {
+    background: rgba(8,10,22,0.8) !important;
+    border: 1px solid rgba(99,102,241,0.12) !important;
+    border-radius: 9px !important;
+    color: #94a3b8 !important;
+}
+
+/* File uploader */
+section[data-testid="stFileUploaderDropzone"] {
+    background: rgba(99,102,241,0.02) !important;
+    border: 2px dashed rgba(99,102,241,0.18) !important;
+    border-radius: 11px !important;
+    transition: all 0.2s !important;
+}
+
+section[data-testid="stFileUploaderDropzone"]:hover {
+    border-color: rgba(99,102,241,0.35) !important;
+    background: rgba(99,102,241,0.05) !important;
+}
+
+/* Progress bar */
+div[data-testid="stProgressBar"] > div > div {
+    background: linear-gradient(90deg, #4f46e5, #06b6d4) !important;
+    border-radius: 4px !important;
+}
+
+/* Alerts */
+div[data-testid="stSuccess"] {
+    background: rgba(16,185,129,0.07) !important;
+    border: 1px solid rgba(16,185,129,0.18) !important;
+    border-radius: 10px !important;
+    color: #6ee7b7 !important;
+}
+
+div[data-testid="stError"] {
+    background: rgba(239,68,68,0.07) !important;
+    border: 1px solid rgba(239,68,68,0.18) !important;
+    border-radius: 10px !important;
+}
+
+div[data-testid="stWarning"] {
+    background: rgba(245,158,11,0.07) !important;
+    border: 1px solid rgba(245,158,11,0.18) !important;
+    border-radius: 10px !important;
+}
+
+div[data-testid="stInfo"] {
+    background: rgba(99,102,241,0.06) !important;
+    border: 1px solid rgba(99,102,241,0.15) !important;
+    border-radius: 10px !important;
+}
+
+/* Plotly charts background */
+.js-plotly-plot .plotly {
+    border-radius: 12px !important;
+    overflow: hidden;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 3px; height: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(99,102,241,0.2); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(99,102,241,0.35); }
+
+hr { border-color: rgba(255,255,255,0.04) !important; }
+
+/* Spinner */
+div[data-testid="stSpinner"] > div {
+    border-top-color: #6366f1 !important;
+}
+
+/* Radio buttons */
+div[data-testid="stRadio"] > div {
+    background: transparent !important;
+}
+
+div[data-testid="stRadio"] label {
+    background: rgba(8,10,22,0.5) !important;
+    border: 1px solid rgba(255,255,255,0.05) !important;
+    border-radius: 8px !important;
+    padding: 6px 12px !important;
+    margin: 3px 0 !important;
+    color: #94a3b8 !important;
+    transition: all 0.15s !important;
+}
+
+div[data-testid="stRadio"] label:hover {
+    border-color: rgba(99,102,241,0.2) !important;
+    background: rgba(99,102,241,0.05) !important;
+}
+
+/* Download buttons */
+div[data-testid="stDownloadButton"] > button {
+    background: rgba(99,102,241,0.08) !important;
+    border: 1px solid rgba(99,102,241,0.18) !important;
+    color: #a5b4fc !important;
+    box-shadow: none !important;
+}
+
+div[data-testid="stDownloadButton"] > button:hover {
+    background: rgba(99,102,241,0.15) !important;
+    border-color: rgba(99,102,241,0.3) !important;
+    transform: translateY(-1px) !important;
+    box-shadow: none !important;
+}
+
+/* Tabs hidden by using chat flow */
+div[data-testid="stTabs"] {
+    display: none !important;
+}
+</style>
+"""
+
+SIDEBAR_CSS = """
+<style>
+.dm-logo {
     display: flex;
     align-items: center;
     gap: 11px;
+    padding: 18px 0 16px;
+    border-bottom: 1px solid rgba(99,102,241,0.08);
+    margin-bottom: 18px;
 }
 
-.dm-icon {
+.dm-icon-wrap {
     width: 38px;
     height: 38px;
     background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #06b6d4 100%);
@@ -606,80 +987,80 @@ section[data-testid="stSidebar"] * { color: #94a3b8 !important; }
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.15rem;
-    box-shadow: 0 0 20px rgba(79,70,229,0.35), inset 0 1px 0 rgba(255,255,255,0.1);
+    font-size: 1.1rem;
+    box-shadow: 0 0 18px rgba(79,70,229,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
     flex-shrink: 0;
     position: relative;
 }
 
-.dm-icon::after {
+.dm-icon-wrap::after {
     content: '';
     position: absolute;
     inset: 0;
     border-radius: 10px;
-    border: 1px solid rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.1);
 }
 
-.dm-name {
-    font-size: 1.02rem !important;
+.dm-name-text {
+    font-size: 1rem !important;
     font-weight: 700 !important;
     color: #f1f5f9 !important;
     letter-spacing: -0.2px;
-    line-height: 1.15;
+    line-height: 1.2;
 }
 
-.dm-sub {
-    font-size: 0.6rem !important;
-    color: rgba(79,70,229,0.8) !important;
+.dm-sub-text {
+    font-size: 0.58rem !important;
+    color: rgba(99,102,241,0.75) !important;
     font-weight: 600 !important;
     text-transform: uppercase;
     letter-spacing: 2px;
 }
 
-.sb-sec {
-    margin-bottom: 6px;
-}
-
-.sb-lbl {
+.sec-lbl {
     font-size: 0.58rem !important;
     font-weight: 700 !important;
-    color: rgba(79,70,229,0.6) !important;
+    color: rgba(99,102,241,0.55) !important;
     text-transform: uppercase !important;
     letter-spacing: 2.5px !important;
     display: block !important;
-    margin-bottom: 8px !important;
+    margin: 14px 0 8px !important;
 }
 
-.doc-pill {
-    background: rgba(79,70,229,0.06);
-    border: 1px solid rgba(79,70,229,0.12);
+.doc-card {
+    background: rgba(99,102,241,0.06);
+    border: 1px solid rgba(99,102,241,0.12);
     border-radius: 10px;
     padding: 9px 12px;
-    margin: 6px 0;
+    margin: 5px 0;
 }
 
-.doc-pill-name {
+.doc-card-name {
     color: #a5b4fc !important;
     font-size: 0.79rem !important;
     font-weight: 600 !important;
-    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
 }
 
-.doc-pill-size {
-    color: #475569 !important;
-    font-size: 0.68rem !important;
+.doc-card-size {
+    color: #3f4f6b !important;
+    font-size: 0.67rem !important;
     margin-top: 2px;
 }
 
-.msg-count {
-    background: rgba(79,70,229,0.06);
-    border: 1px solid rgba(79,70,229,0.1);
+.msg-c {
+    background: rgba(99,102,241,0.05);
+    border: 1px solid rgba(99,102,241,0.1);
     border-radius: 10px;
     padding: 12px;
     text-align: center;
+    margin: 6px 0;
 }
 
-.mc-num {
+.mc-n {
     font-size: 1.8rem !important;
     font-weight: 800 !important;
     background: linear-gradient(135deg, #a5b4fc, #06b6d4) !important;
@@ -687,305 +1068,107 @@ section[data-testid="stSidebar"] * { color: #94a3b8 !important; }
     -webkit-text-fill-color: transparent !important;
     background-clip: text !important;
     display: block !important;
-    line-height: 1.1 !important;
+    line-height: 1 !important;
 }
 
-.mc-lbl {
-    font-size: 0.6rem !important;
-    color: #475569 !important;
+.mc-l {
+    font-size: 0.58rem !important;
+    color: #3f4f6b !important;
     text-transform: uppercase !important;
     letter-spacing: 2px !important;
-    margin-top: 3px !important;
+    margin-top: 4px !important;
     display: block !important;
 }
-
-.stButton > button {
-    background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%) !important;
-    color: #fff !important;
-    border: none !important;
-    border-radius: 9px !important;
-    font-weight: 600 !important;
-    font-size: 0.81rem !important;
-    transition: all 0.2s ease !important;
-    box-shadow: 0 2px 10px rgba(79,70,229,0.22) !important;
-    letter-spacing: 0.1px !important;
-}
-
-.stButton > button:hover {
-    background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%) !important;
-    transform: translateY(-1px) !important;
-    box-shadow: 0 6px 18px rgba(79,70,229,0.3) !important;
-}
-
-.hero {
-    min-height: 94vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 60px 32px;
-    text-align: center;
-    position: relative;
-}
-
-.hero-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    background: rgba(79,70,229,0.07);
-    border: 1px solid rgba(79,70,229,0.18);
-    border-radius: 100px;
-    padding: 7px 20px;
-    font-size: 0.66rem;
-    font-weight: 700;
-    color: #818cf8;
-    letter-spacing: 2.5px;
-    text-transform: uppercase;
-    margin-bottom: 28px;
-}
-
-.hb-dot {
-    width: 5px; height: 5px;
-    background: #22c55e;
-    border-radius: 50%;
-    animation: blink 2s ease infinite;
-}
-
-@keyframes blink {
-    0%,100%{opacity:1;transform:scale(1);}
-    50%{opacity:0.35;transform:scale(0.75);}
-}
-
-.hero-title {
-    font-size: 4.8rem;
-    font-weight: 800;
-    letter-spacing: -3px;
-    line-height: 1;
-    margin-bottom: 20px;
-    background: linear-gradient(135deg, #fff 0%, #a5b4fc 30%, #06b6d4 60%, #fff 100%);
-    background-size: 250% auto;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    animation: titleFlow 7s linear infinite;
-}
-
-@keyframes titleFlow {
-    0%{background-position:0% center;}
-    100%{background-position:250% center;}
-}
-
-.hero-p {
-    font-size: 1.05rem;
-    color: #475569;
-    max-width: 480px;
-    line-height: 1.8;
-    margin: 0 auto 48px;
-    font-weight: 400;
-}
-
-.hero-stats {
-    display: flex;
-    gap: 0;
-    border: 1px solid rgba(255,255,255,0.05);
-    border-radius: 14px;
-    overflow: hidden;
-    max-width: 560px;
-    margin: 0 auto 64px;
-    background: rgba(8,10,20,0.7);
-    backdrop-filter: blur(20px);
-}
-
-.hs {
-    flex: 1;
-    padding: 18px 12px;
-    border-right: 1px solid rgba(255,255,255,0.05);
-    text-align: center;
-}
-
-.hs:last-child { border-right: none; }
-
-.hs-v {
-    font-size: 1.4rem;
-    font-weight: 800;
-    background: linear-gradient(135deg, #a5b4fc, #06b6d4);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    display: block;
-}
-
-.hs-l {
-    font-size: 0.6rem;
-    color: #334155;
-    text-transform: uppercase;
-    letter-spacing: 1.5px;
-    margin-top: 3px;
-    display: block;
-}
-
-.cap-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 10px;
-    max-width: 860px;
-    margin: 0 auto;
-}
-
-.cap {
-    background: rgba(8,10,20,0.7);
-    border: 1px solid rgba(255,255,255,0.04);
-    border-radius: 13px;
-    padding: 18px 14px;
-    text-align: left;
-    transition: all 0.25s ease;
-    position: relative;
-    overflow: hidden;
-}
-
-.cap::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(79,70,229,0.4), transparent);
-    opacity: 0;
-    transition: opacity 0.25s;
-}
-
-.cap:hover {
-    border-color: rgba(79,70,229,0.18);
-    transform: translateY(-3px);
-    box-shadow: 0 10px 30px rgba(79,70,229,0.1);
-}
-
-.cap:hover::before { opacity: 1; }
-
-.cap-ic { font-size: 1.45rem; margin-bottom: 8px; display: block; }
-.cap-nm { color: #cbd5e1; font-size: 0.82rem; font-weight: 600; margin-bottom: 3px; }
-.cap-tx { color: #334155; font-size: 0.71rem; line-height: 1.5; }
-
-.stChatInputContainer {
-    background: rgba(8,10,20,0.85) !important;
-    border: 1px solid rgba(79,70,229,0.14) !important;
-    border-radius: 14px !important;
-    backdrop-filter: blur(20px) !important;
-}
-
-.stChatInputContainer:focus-within {
-    border-color: rgba(79,70,229,0.35) !important;
-    box-shadow: 0 0 0 3px rgba(79,70,229,0.06) !important;
-}
-
-div[data-testid="stExpander"] {
-    background: rgba(8,10,20,0.5) !important;
-    border: 1px solid rgba(255,255,255,0.04) !important;
-    border-radius: 11px !important;
-}
-
-.stSelectbox > div > div {
-    background: rgba(8,10,20,0.8) !important;
-    border: 1px solid rgba(79,70,229,0.12) !important;
-    border-radius: 9px !important;
-}
-
-.stFileUploader {
-    border: 2px dashed rgba(79,70,229,0.16) !important;
-    border-radius: 11px !important;
-    background: rgba(79,70,229,0.02) !important;
-    transition: all 0.2s !important;
-}
-
-.stFileUploader:hover {
-    border-color: rgba(79,70,229,0.32) !important;
-    background: rgba(79,70,229,0.04) !important;
-}
-
-.prompt-btn {
-    background: rgba(79,70,229,0.07) !important;
-    border: 1px solid rgba(79,70,229,0.14) !important;
-    border-radius: 100px !important;
-    color: #a5b4fc !important;
-    font-size: 0.77rem !important;
-    font-weight: 500 !important;
-    padding: 6px 14px !important;
-    box-shadow: none !important;
-}
-
-.prompt-btn:hover {
-    background: rgba(79,70,229,0.13) !important;
-    border-color: rgba(79,70,229,0.28) !important;
-    transform: translateY(-1px) !important;
-    box-shadow: none !important;
-}
-
-::-webkit-scrollbar { width: 3px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(79,70,229,0.18); border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(79,70,229,0.32); }
-
-hr { border-color: rgba(255,255,255,0.04) !important; }
-
-.stProgress > div > div { background: linear-gradient(90deg, #4f46e5, #06b6d4) !important; border-radius: 4px !important; }
 </style>
 """
 
 
 def main():
     st.markdown(CSS, unsafe_allow_html=True)
+    st.markdown(SIDEBAR_CSS, unsafe_allow_html=True)
+
     deps = load_core()
     init(deps)
 
     with st.sidebar:
         st.markdown("""
-        <div class='dm-logo-wrap'>
-            <div class='dm-logo-inner'>
-                <div class='dm-icon'>🧠</div>
-                <div>
-                    <div class='dm-name'>DocuMind AI</div>
-                    <div class='dm-sub'>Document Intelligence</div>
-                </div>
+        <div class='dm-logo'>
+            <div class='dm-icon-wrap'>🧠</div>
+            <div>
+                <div class='dm-name-text'>DocuMind AI</div>
+                <div class='dm-sub-text'>Document Intelligence</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
 
-        st.markdown("<span class='sb-lbl'>Upload Document</span>", unsafe_allow_html=True)
-        f = st.file_uploader("f", type=["pdf", "docx", "pptx", "xlsx", "csv", "txt"], label_visibility="collapsed")
+        st.markdown("<span class='sec-lbl'>Upload Document</span>", unsafe_allow_html=True)
+        f = st.file_uploader(
+            "file",
+            type=["pdf", "docx", "pptx", "xlsx", "csv", "txt"],
+            label_visibility="collapsed"
+        )
 
         if f:
             kb = f.size / 1024
-            st.markdown(f"<div class='doc-pill'><div class='doc-pill-name'>📄 {f.name}</div><div class='doc-pill-size'>{kb:.0f} KB</div></div>", unsafe_allow_html=True)
+            st.markdown(f"""
+            <div class='doc-card'>
+                <div class='doc-card-name'>📄 {f.name}</div>
+                <div class='doc-card-size'>{kb:.0f} KB</div>
+            </div>
+            """, unsafe_allow_html=True)
             if st.button("Process Document →", use_container_width=True):
                 if process_doc(f, deps):
-                    st.success("✅ Ready")
+                    st.success("✅ Document ready")
                     st.rerun()
 
         if st.session_state.doc_ready:
             st.markdown("---")
-            st.markdown("<span class='sb-lbl'>Answer Style</span>", unsafe_allow_html=True)
-            mode = st.selectbox("m", ["detailed", "quick", "bullet", "beginner", "executive", "table"],
-                format_func=lambda x: {"detailed": "📝 Detailed", "quick": "⚡ Quick", "bullet": "• Bullets",
-                "beginner": "🎓 Beginner", "executive": "💼 Executive", "table": "📊 Table"}[x],
-                label_visibility="collapsed")
+            st.markdown("<span class='sec-lbl'>Answer Style</span>", unsafe_allow_html=True)
+            mode = st.selectbox(
+                "m",
+                options=["detailed", "quick", "bullet", "beginner", "executive", "table"],
+                format_func=lambda x: {
+                    "detailed": "📝 Detailed",
+                    "quick": "⚡ Quick",
+                    "bullet": "• Bullets",
+                    "beginner": "🎓 Beginner",
+                    "executive": "💼 Executive",
+                    "table": "📊 Table"
+                }[x],
+                label_visibility="collapsed"
+            )
             st.session_state.answer_mode = mode
 
             st.markdown("---")
-            st.markdown("<span class='sb-lbl'>Active File</span>", unsafe_allow_html=True)
-            st.markdown(f"<div class='doc-pill'><div class='doc-pill-name'>📄 {st.session_state.doc_name}</div></div>", unsafe_allow_html=True)
+            st.markdown("<span class='sec-lbl'>Active Document</span>", unsafe_allow_html=True)
+            st.markdown(f"""
+            <div class='doc-card'>
+                <div class='doc-card-name'>📄 {st.session_state.doc_name}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
-            st.markdown("<span class='sb-lbl'>Session</span>", unsafe_allow_html=True)
-            st.markdown(f"<div class='msg-count'><span class='mc-num'>{len(st.session_state.chat)}</span><span class='mc-lbl'>Messages</span></div>", unsafe_allow_html=True)
+            st.markdown("<span class='sec-lbl'>Session</span>", unsafe_allow_html=True)
+            st.markdown(f"""
+            <div class='msg-c'>
+                <span class='mc-n'>{len(st.session_state.chat)}</span>
+                <span class='mc-l'>Messages</span>
+            </div>
+            """, unsafe_allow_html=True)
 
             st.markdown("---")
-            st.markdown("<span class='sb-lbl'>Quick Actions</span>", unsafe_allow_html=True)
-            for act in ["📝 Summarize document", "✅ Extract action items", "⚠️ Identify risks", "📊 Extract metrics", "❓ Generate FAQ"]:
-                if st.button(act, use_container_width=True, key=f"qa{act[:5]}"):
-                    with st.spinner("Working..."):
-                        fn = lazy("agents.document_action_agent", "perform_document_action")
-                        r = fn(action=act, context=st.session_state.doc_text[:4000], file_name=st.session_state.doc_name)
-                    if r["success"]:
-                        st.session_state.chat.append({"role": "assistant", "content": f"**{act}**\n\n{r['result']}"})
-                        st.rerun()
+            st.markdown("<span class='sec-lbl'>Quick Actions</span>", unsafe_allow_html=True)
+
+            for act in [
+                "📝 Summarize document",
+                "✅ Extract action items",
+                "⚠️ Identify all risks",
+                "📊 Show data as charts",
+                "❓ Generate FAQ",
+                "🧩 Create a quiz"
+            ]:
+                if st.button(act, use_container_width=True, key=f"qa{act[:6]}"):
+                    answer_q(act, deps)
+                    st.rerun()
 
             st.markdown("---")
             c1, c2 = st.columns(2)
@@ -996,43 +1179,24 @@ def main():
                     st.rerun()
             with c2:
                 if st.button("📂 New", use_container_width=True):
-                    for k in ["doc_ready"]:
-                        st.session_state[k] = False
-                    for k in ["file_path", "doc_name", "doc_text"]:
-                        st.session_state[k] = ""
+                    st.session_state.doc_ready = False
+                    st.session_state.file_path = ""
+                    st.session_state.doc_name = ""
+                    st.session_state.doc_text = ""
                     st.session_state.chat = []
                     st.session_state.prompts = []
                     st.session_state.memory = deps["SessionMemory"]()
                     st.rerun()
 
     if not st.session_state.doc_ready:
-        st.markdown("""
-        <div class='hero'>
-            <div class='hero-badge'><div class='hb-dot'></div>AI-Powered · Private · Instant</div>
-            <div class='hero-title'>DocuMind AI</div>
-            <div class='hero-p'>Upload any document. Ask anything. Get expert answers, live charts, quizzes, and knowledge links — instantly.</div>
-            <div class='hero-stats'>
-                <div class='hs'><span class='hs-v'>6+</span><span class='hs-l'>Formats</span></div>
-                <div class='hs'><span class='hs-v'>5</span><span class='hs-l'>AI Agents</span></div>
-                <div class='hs'><span class='hs-v'>20+</span><span class='hs-l'>Features</span></div>
-                <div class='hs'><span class='hs-v'>100%</span><span class='hs-l'>Private</span></div>
-            </div>
-            <div class='cap-grid'>
-                <div class='cap'><span class='cap-ic'>📊</span><div class='cap-nm'>Auto Charts</div><div class='cap-tx'>Just ask for a graph — gets generated instantly</div></div>
-                <div class='cap'><span class='cap-ic'>🧩</span><div class='cap-nm'>Quiz Mode</div><div class='cap-tx'>Ask for a quiz — 5 MCQ questions generated</div></div>
-                <div class='cap'><span class='cap-ic'>🔊</span><div class='cap-nm'>Read Aloud</div><div class='cap-tx'>Every answer can be spoken aloud by AI</div></div>
-                <div class='cap'><span class='cap-ic'>🌐</span><div class='cap-nm'>Web Resources</div><div class='cap-tx'>Real YouTube, Google and Scholar links</div></div>
-                <div class='cap'><span class='cap-ic'>📥</span><div class='cap-nm'>Export Anything</div><div class='cap-tx'>Download answers as PDF, DOCX, CSV, XLSX</div></div>
-                <div class='cap'><span class='cap-ic'>💡</span><div class='cap-nm'>Smart Prompts</div><div class='cap-tx'>Auto-generated questions from your document</div></div>
-                <div class='cap'><span class='cap-ic'>🔍</span><div class='cap-nm'>Hybrid Search</div><div class='cap-tx'>FAISS semantic + BM25 keyword with RRF</div></div>
-                <div class='cap'><span class='cap-ic'>🔒</span><div class='cap-nm'>100% Private</div><div class='cap-tx'>Nothing ever leaves your machine</div></div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(HERO_HTML, unsafe_allow_html=True)
         return
 
     if st.session_state.prompts:
-        st.markdown("<p style='color:#475569;font-size:0.76rem;margin-bottom:8px;'>💡 Suggested questions from your document:</p>", unsafe_allow_html=True)
+        st.markdown(
+            "<p style='color:rgba(99,102,241,0.6);font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:2px;margin-bottom:10px;'>💡 Suggested from your document</p>",
+            unsafe_allow_html=True
+        )
         cols = st.columns(3)
         for i, p in enumerate(st.session_state.prompts):
             with cols[i % 3]:
@@ -1046,7 +1210,9 @@ def main():
 
     col_in, col_v = st.columns([6, 1])
     with col_in:
-        question = st.chat_input("Ask anything — charts, quiz, summary, resources will appear automatically...")
+        question = st.chat_input(
+            "Ask anything — type 'show chart', 'give me a quiz', 'download as pdf' for special features..."
+        )
     with col_v:
         try:
             is_https = st.context.headers.get("x-forwarded-proto") == "https"
@@ -1061,6 +1227,7 @@ def main():
                     vr = fn(audio["bytes"])
                     if vr["success"]:
                         question = vr["text"]
+                        st.success(f"🎤 {question}")
             except Exception:
                 st.button("🎤", help="Voice unavailable")
         else:
