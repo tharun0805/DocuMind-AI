@@ -26,3 +26,7 @@ streamlit-mic-recorder
 reportlab
 langchain-groq
 plotly
+plotly
+kaleido
+pillow
+langchain-groq
