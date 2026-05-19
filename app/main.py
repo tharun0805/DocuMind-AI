@@ -890,211 +890,259 @@ SIDEBAR_CSS = """
 
 
 def show_hero():
-    st.markdown("""
-    <style>
-    @keyframes blink {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.3; }
-    }
-    @keyframes flow {
-        0% { background-position: 0% center; }
-        100% { background-position: 300% center; }
-    }
-    .hero-wrap {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        text-align: center;
-        padding: 70px 40px 60px;
-        min-height: 90vh;
-    }
-    .hero-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        background: rgba(99,102,241,0.08);
-        border: 1px solid rgba(99,102,241,0.22);
-        border-radius: 100px;
-        padding: 8px 22px;
-        font-size: 0.65rem;
-        font-weight: 700;
-        color: #818cf8;
-        letter-spacing: 2.5px;
-        text-transform: uppercase;
-        margin-bottom: 32px;
-    }
-    .hero-dot {
-        width: 6px;
-        height: 6px;
-        background: #22c55e;
-        border-radius: 50%;
-        animation: blink 2s ease infinite;
-        display: inline-block;
-    }
-    .hero-title {
-        font-size: 5.5rem;
-        font-weight: 900;
-        letter-spacing: -4px;
-        line-height: 0.95;
-        margin-bottom: 22px;
-        background: linear-gradient(135deg, #ffffff 0%, #a5b4fc 25%, #06b6d4 55%, #a5b4fc 80%, #ffffff 100%);
-        background-size: 300% auto;
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        animation: flow 6s linear infinite;
-    }
-    .hero-sub {
-        font-size: 1.1rem;
-        color: #4b5563;
-        max-width: 460px;
-        line-height: 1.8;
-        margin: 0 auto 52px;
-    }
-    .stats-row {
-        display: flex;
-        border: 1px solid rgba(255,255,255,0.06);
-        border-radius: 16px;
-        overflow: hidden;
-        background: rgba(8,10,22,0.8);
-        backdrop-filter: blur(20px);
-        max-width: 560px;
-        margin: 0 auto 64px;
-    }
-    .stat-box {
-        flex: 1;
-        padding: 20px 10px;
-        text-align: center;
-        border-right: 1px solid rgba(255,255,255,0.05);
-    }
-    .stat-box:last-child { border-right: none; }
-    .stat-val {
-        font-size: 1.6rem;
-        font-weight: 800;
-        background: linear-gradient(135deg, #a5b4fc, #06b6d4);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        display: block;
-    }
-    .stat-lbl {
-        font-size: 0.58rem;
-        color: #374151;
-        text-transform: uppercase;
-        letter-spacing: 1.5px;
-        margin-top: 4px;
-        display: block;
-    }
-    .feat-grid {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 12px;
-        max-width: 880px;
-        margin: 0 auto;
-    }
-    .feat-card {
-        background: rgba(8,10,22,0.75);
-        border: 1px solid rgba(255,255,255,0.05);
-        border-radius: 14px;
-        padding: 20px 16px;
-        text-align: left;
-        transition: all 0.3s ease;
-        position: relative;
-        overflow: hidden;
-    }
-    .feat-card:hover {
-        border-color: rgba(99,102,241,0.2);
-        transform: translateY(-3px);
-        box-shadow: 0 12px 40px rgba(99,102,241,0.1);
-    }
-    .feat-card::before {
-        content: '';
-        position: absolute;
-        top: 0; left: 0; right: 0;
-        height: 1px;
-        background: linear-gradient(90deg, transparent, rgba(99,102,241,0.5), transparent);
-        opacity: 0;
-        transition: opacity 0.3s;
-    }
-    .feat-card:hover::before { opacity: 1; }
-    .feat-ic { font-size: 1.5rem; margin-bottom: 10px; display: block; }
-    .feat-nm { color: #e2e8f0; font-size: 0.83rem; font-weight: 600; margin-bottom: 4px; }
-    .feat-tx { color: #374151; font-size: 0.72rem; line-height: 1.5; }
-    </style>
+    components.html("""
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; }
 
-    <div class="hero-wrap">
-        <div class="hero-badge">
-            <span class="hero-dot"></span>
-            Enterprise Document Intelligence
-        </div>
-        <div class="hero-title">DocuMind AI</div>
-        <div class="hero-sub">
-            Upload any document. Ask in plain English.<br>
-            Get answers, charts, quizzes, and knowledge — instantly.
-        </div>
-        <div class="stats-row">
-            <div class="stat-box">
-                <span class="stat-val">6+</span>
-                <span class="stat-lbl">Formats</span>
-            </div>
-            <div class="stat-box">
-                <span class="stat-val">5</span>
-                <span class="stat-lbl">AI Agents</span>
-            </div>
-            <div class="stat-box">
-                <span class="stat-val">20+</span>
-                <span class="stat-lbl">Features</span>
-            </div>
-            <div class="stat-box">
-                <span class="stat-val">100%</span>
-                <span class="stat-lbl">Private</span>
-            </div>
-        </div>
-        <div class="feat-grid">
-            <div class="feat-card">
-                <span class="feat-ic">📊</span>
-                <div class="feat-nm">Auto Charts</div>
-                <div class="feat-tx">Say "show chart" — real Plotly graphs generated instantly</div>
-            </div>
-            <div class="feat-card">
-                <span class="feat-ic">🧩</span>
-                <div class="feat-nm">Quiz Mode</div>
-                <div class="feat-tx">Say "give me a quiz" — MCQ questions from document</div>
-            </div>
-            <div class="feat-card">
-                <span class="feat-ic">🔊</span>
-                <div class="feat-nm">Read Aloud</div>
-                <div class="feat-tx">Every answer spoken aloud by your browser</div>
-            </div>
-            <div class="feat-card">
-                <span class="feat-ic">🌐</span>
-                <div class="feat-nm">Live Resources</div>
-                <div class="feat-tx">YouTube + Google + Scholar links after every answer</div>
-            </div>
-            <div class="feat-card">
-                <span class="feat-ic">📥</span>
-                <div class="feat-nm">Export Anything</div>
-                <div class="feat-tx">PDF, DOCX, Excel, CSV — just ask to download</div>
-            </div>
-            <div class="feat-card">
-                <span class="feat-ic">💡</span>
-                <div class="feat-nm">Smart Prompts</div>
-                <div class="feat-tx">Auto-generated questions from your document</div>
-            </div>
-            <div class="feat-card">
-                <span class="feat-ic">🔍</span>
-                <div class="feat-nm">Hybrid Search</div>
-                <div class="feat-tx">FAISS semantic + BM25 keyword with RRF reranking</div>
-            </div>
-            <div class="feat-card">
-                <span class="feat-ic">🔒</span>
-                <div class="feat-nm">100% Private</div>
-                <div class="feat-tx">Documents never leave your machine — ever</div>
-            </div>
-        </div>
+body {
+    background: #04060f;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 40px;
+    text-align: center;
+    overflow-x: hidden;
+}
+
+body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+        radial-gradient(ellipse 55% 45% at 20% 25%, rgba(99,102,241,0.12) 0%, transparent 55%),
+        radial-gradient(ellipse 45% 35% at 80% 70%, rgba(6,182,212,0.08) 0%, transparent 55%);
+    pointer-events: none;
+}
+
+@keyframes blink {
+    0%,100%{opacity:1;transform:scale(1);}
+    50%{opacity:0.3;transform:scale(0.8);}
+}
+
+@keyframes flow {
+    0%{background-position:0% center;}
+    100%{background-position:300% center;}
+}
+
+@keyframes fadeUp {
+    from{opacity:0;transform:translateY(20px);}
+    to{opacity:1;transform:translateY(0);}
+}
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(99,102,241,0.08);
+    border: 1px solid rgba(99,102,241,0.22);
+    border-radius: 100px;
+    padding: 8px 22px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #818cf8;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    margin-bottom: 32px;
+    animation: fadeUp 0.6s ease forwards;
+}
+
+.dot {
+    width: 6px;
+    height: 6px;
+    background: #22c55e;
+    border-radius: 50%;
+    animation: blink 2s ease infinite;
+}
+
+h1 {
+    font-size: clamp(3rem, 8vw, 6rem);
+    font-weight: 900;
+    letter-spacing: -4px;
+    line-height: 0.95;
+    margin-bottom: 22px;
+    background: linear-gradient(135deg, #ffffff 0%, #a5b4fc 25%, #06b6d4 55%, #a5b4fc 80%, #ffffff 100%);
+    background-size: 300% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: flow 6s linear infinite, fadeUp 0.8s ease forwards;
+}
+
+.subtitle {
+    font-size: 1.05rem;
+    color: #4b5563;
+    max-width: 460px;
+    line-height: 1.8;
+    margin: 0 auto 52px;
+    animation: fadeUp 1s ease forwards;
+}
+
+.stats {
+    display: flex;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 16px;
+    overflow: hidden;
+    background: rgba(8,10,22,0.8);
+    max-width: 560px;
+    margin: 0 auto 64px;
+    animation: fadeUp 1.2s ease forwards;
+}
+
+.stat {
+    flex: 1;
+    padding: 20px 10px;
+    text-align: center;
+    border-right: 1px solid rgba(255,255,255,0.05);
+}
+.stat:last-child { border-right: none; }
+
+.stat-val {
+    font-size: 1.6rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, #a5b4fc, #06b6d4);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    display: block;
+}
+
+.stat-lbl {
+    font-size: 0.58rem;
+    color: #374151;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-top: 4px;
+    display: block;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    max-width: 900px;
+    margin: 0 auto;
+    animation: fadeUp 1.4s ease forwards;
+}
+
+.card {
+    background: rgba(8,10,22,0.8);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 14px;
+    padding: 20px 16px;
+    text-align: left;
+    transition: all 0.3s ease;
+    cursor: default;
+    position: relative;
+    overflow: hidden;
+}
+
+.card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(99,102,241,0.6), transparent);
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.card:hover {
+    border-color: rgba(99,102,241,0.22);
+    transform: translateY(-4px);
+    box-shadow: 0 14px 40px rgba(99,102,241,0.12);
+}
+
+.card:hover::before { opacity: 1; }
+
+.ic { font-size: 1.5rem; margin-bottom: 10px; display: block; }
+.nm { color: #e2e8f0; font-size: 0.83rem; font-weight: 600; margin-bottom: 4px; }
+.tx { color: #374151; font-size: 0.71rem; line-height: 1.5; }
+</style>
+</head>
+<body>
+<div class="badge">
+    <div class="dot"></div>
+    Enterprise Document Intelligence
+</div>
+
+<h1>DocuMind AI</h1>
+
+<p class="subtitle">
+    Upload any document. Ask in plain English.<br>
+    Get answers, charts, quizzes, and knowledge — instantly.
+</p>
+
+<div class="stats">
+    <div class="stat">
+        <span class="stat-val">6+</span>
+        <span class="stat-lbl">Formats</span>
     </div>
-    """, unsafe_allow_html=True)
+    <div class="stat">
+        <span class="stat-val">5</span>
+        <span class="stat-lbl">AI Agents</span>
+    </div>
+    <div class="stat">
+        <span class="stat-val">20+</span>
+        <span class="stat-lbl">Features</span>
+    </div>
+    <div class="stat">
+        <span class="stat-val">100%</span>
+        <span class="stat-lbl">Private</span>
+    </div>
+</div>
+
+<div class="grid">
+    <div class="card">
+        <span class="ic">📊</span>
+        <div class="nm">Auto Charts</div>
+        <div class="tx">Say "show chart" — real Plotly graphs generated instantly</div>
+    </div>
+    <div class="card">
+        <span class="ic">🧩</span>
+        <div class="nm">Quiz Mode</div>
+        <div class="tx">Say "give me a quiz" — MCQ questions from document</div>
+    </div>
+    <div class="card">
+        <span class="ic">🔊</span>
+        <div class="nm">Read Aloud</div>
+        <div class="tx">Every answer spoken aloud by browser TTS</div>
+    </div>
+    <div class="card">
+        <span class="ic">🌐</span>
+        <div class="nm">Live Resources</div>
+        <div class="tx">YouTube + Google + Scholar links after every answer</div>
+    </div>
+    <div class="card">
+        <span class="ic">📥</span>
+        <div class="nm">Export Anything</div>
+        <div class="tx">PDF, DOCX, Excel, CSV — just ask to download</div>
+    </div>
+    <div class="card">
+        <span class="ic">💡</span>
+        <div class="nm">Smart Prompts</div>
+        <div class="tx">Auto-generated questions from your document</div>
+    </div>
+    <div class="card">
+        <span class="ic">🔍</span>
+        <div class="nm">Hybrid Search</div>
+        <div class="tx">FAISS semantic + BM25 keyword with RRF reranking</div>
+    </div>
+    <div class="card">
+        <span class="ic">🔒</span>
+        <div class="nm">100% Private</div>
+        <div class="tx">Documents never leave your machine — ever</div>
+    </div>
+</div>
+</body>
+</html>
+    """, height=900, scrolling=False)
 
 
 def main():
