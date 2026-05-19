@@ -638,13 +638,11 @@ CSS = """
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 
 html, body, [class*="css"], * {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
-    box-sizing: border-box;
+    font-family: 'Inter', -apple-system, sans-serif !important;
 }
 
 .stApp {
     background: #04060f !important;
-    min-height: 100vh;
 }
 
 section[data-testid="stSidebar"] {
@@ -652,26 +650,19 @@ section[data-testid="stSidebar"] {
     border-right: 1px solid rgba(99,102,241,0.08) !important;
 }
 
-section[data-testid="stSidebar"] > div {
-    background: transparent !important;
-}
-
 section[data-testid="stSidebar"] * {
     color: #94a3b8 !important;
 }
 
-/* Buttons */
 .stButton > button {
     background: linear-gradient(135deg, #4f46e5, #6366f1) !important;
-    color: #ffffff !important;
+    color: #fff !important;
     border: none !important;
     border-radius: 9px !important;
     font-weight: 600 !important;
     font-size: 0.8rem !important;
-    padding: 8px 16px !important;
-    transition: all 0.2s ease !important;
+    transition: all 0.2s !important;
     box-shadow: 0 2px 10px rgba(79,70,229,0.2) !important;
-    letter-spacing: 0.1px !important;
 }
 
 .stButton > button:hover {
@@ -688,8 +679,8 @@ section[data-testid="stSidebar"] * {
 }
 
 .stChatInputContainer:focus-within {
-    border-color: rgba(99,102,241,0.35) !important;
-    box-shadow: 0 0 0 3px rgba(99,102,241,0.06) !important;
+    border-color: rgba(99,102,241,0.4) !important;
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.07) !important;
 }
 
 .stChatInputContainer textarea {
@@ -700,60 +691,34 @@ section[data-testid="stSidebar"] * {
 /* Chat messages */
 div[data-testid="stChatMessage"] {
     background: transparent !important;
-    border: none !important;
 }
 
-/* Expander */
 div[data-testid="stExpander"] {
     background: rgba(8,10,22,0.5) !important;
     border: 1px solid rgba(255,255,255,0.04) !important;
     border-radius: 10px !important;
 }
 
-/* Selectbox */
-div[data-testid="stSelectbox"] > div > div {
-    background: rgba(8,10,22,0.8) !important;
-    border: 1px solid rgba(99,102,241,0.12) !important;
-    border-radius: 9px !important;
-    color: #94a3b8 !important;
-}
-
-/* File uploader */
 section[data-testid="stFileUploaderDropzone"] {
     background: rgba(99,102,241,0.02) !important;
-    border: 2px dashed rgba(99,102,241,0.18) !important;
+    border: 2px dashed rgba(99,102,241,0.2) !important;
     border-radius: 11px !important;
-    transition: all 0.2s !important;
 }
 
-section[data-testid="stFileUploaderDropzone"]:hover {
-    border-color: rgba(99,102,241,0.35) !important;
-    background: rgba(99,102,241,0.05) !important;
-}
-
-/* Progress bar */
 div[data-testid="stProgressBar"] > div > div {
     background: linear-gradient(90deg, #4f46e5, #06b6d4) !important;
     border-radius: 4px !important;
 }
 
-/* Alerts */
 div[data-testid="stSuccess"] {
     background: rgba(16,185,129,0.07) !important;
-    border: 1px solid rgba(16,185,129,0.18) !important;
+    border: 1px solid rgba(16,185,129,0.2) !important;
     border-radius: 10px !important;
-    color: #6ee7b7 !important;
 }
 
 div[data-testid="stError"] {
     background: rgba(239,68,68,0.07) !important;
-    border: 1px solid rgba(239,68,68,0.18) !important;
-    border-radius: 10px !important;
-}
-
-div[data-testid="stWarning"] {
-    background: rgba(245,158,11,0.07) !important;
-    border: 1px solid rgba(245,158,11,0.18) !important;
+    border: 1px solid rgba(239,68,68,0.2) !important;
     border-radius: 10px !important;
 }
 
@@ -763,28 +728,17 @@ div[data-testid="stInfo"] {
     border-radius: 10px !important;
 }
 
-/* Plotly charts background */
-.js-plotly-plot .plotly {
-    border-radius: 12px !important;
-    overflow: hidden;
+div[data-testid="stDownloadButton"] > button {
+    background: rgba(99,102,241,0.08) !important;
+    border: 1px solid rgba(99,102,241,0.2) !important;
+    color: #a5b4fc !important;
+    box-shadow: none !important;
 }
 
-/* Scrollbar */
-::-webkit-scrollbar { width: 3px; height: 3px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(99,102,241,0.2); border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(99,102,241,0.35); }
-
-hr { border-color: rgba(255,255,255,0.04) !important; }
-
-/* Spinner */
-div[data-testid="stSpinner"] > div {
-    border-top-color: #6366f1 !important;
-}
-
-/* Radio buttons */
-div[data-testid="stRadio"] > div {
-    background: transparent !important;
+div[data-testid="stDownloadButton"] > button:hover {
+    background: rgba(99,102,241,0.15) !important;
+    transform: translateY(-1px) !important;
+    box-shadow: none !important;
 }
 
 div[data-testid="stRadio"] label {
@@ -798,29 +752,25 @@ div[data-testid="stRadio"] label {
 }
 
 div[data-testid="stRadio"] label:hover {
-    border-color: rgba(99,102,241,0.2) !important;
-    background: rgba(99,102,241,0.05) !important;
+    border-color: rgba(99,102,241,0.25) !important;
 }
 
-/* Download buttons */
-div[data-testid="stDownloadButton"] > button {
-    background: rgba(99,102,241,0.08) !important;
-    border: 1px solid rgba(99,102,241,0.18) !important;
-    color: #a5b4fc !important;
-    box-shadow: none !important;
+div[data-testid="stSelectbox"] > div > div {
+    background: rgba(8,10,22,0.8) !important;
+    border: 1px solid rgba(99,102,241,0.14) !important;
+    border-radius: 9px !important;
 }
 
-div[data-testid="stDownloadButton"] > button:hover {
-    background: rgba(99,102,241,0.15) !important;
-    border-color: rgba(99,102,241,0.3) !important;
-    transform: translateY(-1px) !important;
-    box-shadow: none !important;
+div[data-testid="stSpinner"] > div {
+    border-top-color: #6366f1 !important;
 }
 
-/* Tabs hidden by using chat flow */
-div[data-testid="stTabs"] {
-    display: none !important;
-}
+::-webkit-scrollbar { width: 3px; height: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(99,102,241,0.2); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(99,102,241,0.35); }
+
+hr { border-color: rgba(255,255,255,0.04) !important; }
 </style>
 """
 
@@ -942,67 +892,209 @@ SIDEBAR_CSS = """
 def show_hero():
     st.markdown("""
     <style>
-    @keyframes blink{0%,100%{opacity:1;}50%{opacity:0.3;}}
-    @keyframes titleflow{0%{background-position:0% center;}100%{background-position:300% center;}}
+    @keyframes blink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.3; }
+    }
+    @keyframes flow {
+        0% { background-position: 0% center; }
+        100% { background-position: 300% center; }
+    }
+    .hero-wrap {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 70px 40px 60px;
+        min-height: 90vh;
+    }
+    .hero-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: rgba(99,102,241,0.08);
+        border: 1px solid rgba(99,102,241,0.22);
+        border-radius: 100px;
+        padding: 8px 22px;
+        font-size: 0.65rem;
+        font-weight: 700;
+        color: #818cf8;
+        letter-spacing: 2.5px;
+        text-transform: uppercase;
+        margin-bottom: 32px;
+    }
+    .hero-dot {
+        width: 6px;
+        height: 6px;
+        background: #22c55e;
+        border-radius: 50%;
+        animation: blink 2s ease infinite;
+        display: inline-block;
+    }
+    .hero-title {
+        font-size: 5.5rem;
+        font-weight: 900;
+        letter-spacing: -4px;
+        line-height: 0.95;
+        margin-bottom: 22px;
+        background: linear-gradient(135deg, #ffffff 0%, #a5b4fc 25%, #06b6d4 55%, #a5b4fc 80%, #ffffff 100%);
+        background-size: 300% auto;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        animation: flow 6s linear infinite;
+    }
+    .hero-sub {
+        font-size: 1.1rem;
+        color: #4b5563;
+        max-width: 460px;
+        line-height: 1.8;
+        margin: 0 auto 52px;
+    }
+    .stats-row {
+        display: flex;
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 16px;
+        overflow: hidden;
+        background: rgba(8,10,22,0.8);
+        backdrop-filter: blur(20px);
+        max-width: 560px;
+        margin: 0 auto 64px;
+    }
+    .stat-box {
+        flex: 1;
+        padding: 20px 10px;
+        text-align: center;
+        border-right: 1px solid rgba(255,255,255,0.05);
+    }
+    .stat-box:last-child { border-right: none; }
+    .stat-val {
+        font-size: 1.6rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, #a5b4fc, #06b6d4);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        display: block;
+    }
+    .stat-lbl {
+        font-size: 0.58rem;
+        color: #374151;
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+        margin-top: 4px;
+        display: block;
+    }
+    .feat-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+        max-width: 880px;
+        margin: 0 auto;
+    }
+    .feat-card {
+        background: rgba(8,10,22,0.75);
+        border: 1px solid rgba(255,255,255,0.05);
+        border-radius: 14px;
+        padding: 20px 16px;
+        text-align: left;
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+    }
+    .feat-card:hover {
+        border-color: rgba(99,102,241,0.2);
+        transform: translateY(-3px);
+        box-shadow: 0 12px 40px rgba(99,102,241,0.1);
+    }
+    .feat-card::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(99,102,241,0.5), transparent);
+        opacity: 0;
+        transition: opacity 0.3s;
+    }
+    .feat-card:hover::before { opacity: 1; }
+    .feat-ic { font-size: 1.5rem; margin-bottom: 10px; display: block; }
+    .feat-nm { color: #e2e8f0; font-size: 0.83rem; font-weight: 600; margin-bottom: 4px; }
+    .feat-tx { color: #374151; font-size: 0.72rem; line-height: 1.5; }
     </style>
-    """, unsafe_allow_html=True)
 
-    st.markdown("""
-    <div style="text-align:center;padding:60px 24px 20px;">
-        <div style="display:inline-flex;align-items:center;gap:8px;background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.18);border-radius:100px;padding:7px 20px;font-size:0.65rem;font-weight:700;color:#818cf8;letter-spacing:2.5px;text-transform:uppercase;margin-bottom:28px;">
-            <div style="width:5px;height:5px;background:#22c55e;border-radius:50%;animation:blink 2s ease infinite;"></div>
+    <div class="hero-wrap">
+        <div class="hero-badge">
+            <span class="hero-dot"></span>
             Enterprise Document Intelligence
+        </div>
+        <div class="hero-title">DocuMind AI</div>
+        <div class="hero-sub">
+            Upload any document. Ask in plain English.<br>
+            Get answers, charts, quizzes, and knowledge — instantly.
+        </div>
+        <div class="stats-row">
+            <div class="stat-box">
+                <span class="stat-val">6+</span>
+                <span class="stat-lbl">Formats</span>
+            </div>
+            <div class="stat-box">
+                <span class="stat-val">5</span>
+                <span class="stat-lbl">AI Agents</span>
+            </div>
+            <div class="stat-box">
+                <span class="stat-val">20+</span>
+                <span class="stat-lbl">Features</span>
+            </div>
+            <div class="stat-box">
+                <span class="stat-val">100%</span>
+                <span class="stat-lbl">Private</span>
+            </div>
+        </div>
+        <div class="feat-grid">
+            <div class="feat-card">
+                <span class="feat-ic">📊</span>
+                <div class="feat-nm">Auto Charts</div>
+                <div class="feat-tx">Say "show chart" — real Plotly graphs generated instantly</div>
+            </div>
+            <div class="feat-card">
+                <span class="feat-ic">🧩</span>
+                <div class="feat-nm">Quiz Mode</div>
+                <div class="feat-tx">Say "give me a quiz" — MCQ questions from document</div>
+            </div>
+            <div class="feat-card">
+                <span class="feat-ic">🔊</span>
+                <div class="feat-nm">Read Aloud</div>
+                <div class="feat-tx">Every answer spoken aloud by your browser</div>
+            </div>
+            <div class="feat-card">
+                <span class="feat-ic">🌐</span>
+                <div class="feat-nm">Live Resources</div>
+                <div class="feat-tx">YouTube + Google + Scholar links after every answer</div>
+            </div>
+            <div class="feat-card">
+                <span class="feat-ic">📥</span>
+                <div class="feat-nm">Export Anything</div>
+                <div class="feat-tx">PDF, DOCX, Excel, CSV — just ask to download</div>
+            </div>
+            <div class="feat-card">
+                <span class="feat-ic">💡</span>
+                <div class="feat-nm">Smart Prompts</div>
+                <div class="feat-tx">Auto-generated questions from your document</div>
+            </div>
+            <div class="feat-card">
+                <span class="feat-ic">🔍</span>
+                <div class="feat-nm">Hybrid Search</div>
+                <div class="feat-tx">FAISS semantic + BM25 keyword with RRF reranking</div>
+            </div>
+            <div class="feat-card">
+                <span class="feat-ic">🔒</span>
+                <div class="feat-nm">100% Private</div>
+                <div class="feat-tx">Documents never leave your machine — ever</div>
+            </div>
         </div>
     </div>
     """, unsafe_allow_html=True)
-
-    st.markdown("""
-    <div style="text-align:center;padding:0 24px;">
-        <div style="font-size:clamp(2.8rem,7vw,5rem);font-weight:900;letter-spacing:-3px;line-height:1;margin-bottom:20px;background:linear-gradient(135deg,#ffffff 0%,#a5b4fc 30%,#06b6d4 65%,#ffffff 100%);background-size:300% auto;-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;animation:titleflow 8s linear infinite;">DocuMind AI</div>
-        <div style="font-size:1.05rem;color:#475569;max-width:500px;line-height:1.8;margin:0 auto 48px;font-weight:400;">Upload any document. Ask in plain English.<br>Get answers, charts, quizzes, and knowledge instantly.</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    col1, col2, col3, col4 = st.columns(4)
-    for col, val, lbl in zip(
-        [col1, col2, col3, col4],
-        ["6+", "5", "20+", "100%"],
-        ["Formats", "AI Agents", "Features", "Private"]
-    ):
-        with col:
-            st.markdown(f"""
-            <div style="background:rgba(8,10,22,0.7);border:1px solid rgba(255,255,255,0.05);border-radius:12px;padding:18px 12px;text-align:center;">
-                <div style="font-size:1.5rem;font-weight:800;background:linear-gradient(135deg,#a5b4fc,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">{val}</div>
-                <div style="font-size:0.6rem;color:#334155;text-transform:uppercase;letter-spacing:1.5px;margin-top:4px;">{lbl}</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    features = [
-        ("📊", "Auto Charts", "Say 'show chart' — real graphs generated instantly"),
-        ("🧩", "Quiz Mode", "Say 'give me a quiz' — MCQ from document"),
-        ("🔊", "Read Aloud", "Every answer spoken aloud by browser"),
-        ("🌐", "Live Resources", "YouTube + Google + Scholar after every answer"),
-        ("📥", "Export Anything", "PDF, DOCX, Excel, CSV on demand"),
-        ("💡", "Smart Prompts", "Auto-generated questions from document"),
-        ("🔍", "Hybrid Search", "FAISS semantic + BM25 keyword with RRF"),
-        ("🔒", "100% Private", "Nothing ever leaves your machine"),
-    ]
-
-    row1 = st.columns(4)
-    row2 = st.columns(4)
-
-    for i, (icon, name, desc) in enumerate(features):
-        col = row1[i] if i < 4 else row2[i - 4]
-        with col:
-            st.markdown(f"""
-            <div style="background:rgba(8,10,22,0.7);border:1px solid rgba(255,255,255,0.04);border-radius:13px;padding:18px 14px;margin-bottom:10px;transition:all 0.25s;">
-                <span style="font-size:1.4rem;display:block;margin-bottom:8px;">{icon}</span>
-                <div style="color:#cbd5e1;font-size:0.82rem;font-weight:600;margin-bottom:4px;">{name}</div>
-                <div style="color:#334155;font-size:0.71rem;line-height:1.5;">{desc}</div>
-            </div>
-            """, unsafe_allow_html=True)
 
 
 def main():
