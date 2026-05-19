@@ -81,6 +81,7 @@ def init(deps):
         "doc_name": "",
         "doc_text": "",
         "prompts": [],
+        "pending_prompts": "",
         "answer_mode": "detailed",
         "multi_docs": [],
         "last_q": "",
@@ -461,12 +462,17 @@ def process_doc(f, deps) -> bool:
         pb.progress(35, "✂️ Chunking...")
         chunks = deps["chunk_text"](text)
 
-        pb.progress(65, "🔢 Building search index...")
-        deps["create_vector_store"](chunks)
-        deps["create_bm25_index"](chunks)
+        pb.progress(65, "🔢 Building search indexes in parallel...")
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            f1 = executor.submit(deps["create_vector_store"], chunks)
+            f2 = executor.submit(deps["create_bm25_index"], chunks)
+            f1.result()
+            f2.result()
 
-        pb.progress(88, "💡 Generating smart prompts...")
-        st.session_state.prompts = gen_prompts(text)
+        pb.progress(88, "💡 Almost ready...")
+        st.session_state.prompts = []
+        st.session_state.pending_prompts = text[:1500]
 
         pb.progress(100, "✅ Ready!")
         time.sleep(0.2)
@@ -561,7 +567,7 @@ def answer_q(question: str, deps):
     show_msg("assistant", answer, tts=True)
 
     if evidence:
-        with st.expander("📎 Evidence Sources"):
+        with st.expander("Evidence Sources"):
             for i, chunk in enumerate(evidence, 1):
                 st.markdown(f"<div style='background:rgba(99,102,241,0.04);border-left:2px solid rgba(99,102,241,0.3);border-radius:0 8px 8px 0;padding:9px 13px;margin:6px 0;font-size:0.79rem;color:#64748b;line-height:1.55;'><strong style='color:#a5b4fc;'>Source {i}</strong><br>{chunk}</div>", unsafe_allow_html=True)
 
@@ -1151,6 +1157,9 @@ def main():
 
     deps = load_core()
     init(deps)
+    if st.session_state.get("pending_prompts") and not st.session_state.prompts:
+        st.session_state.prompts = gen_prompts(st.session_state.pending_prompts)
+        st.session_state.pending_prompts = ""
 
     with st.sidebar:
         st.markdown("""
@@ -1165,9 +1174,9 @@ def main():
 
         st.markdown("<span class='sec-lbl'>Upload Document</span>", unsafe_allow_html=True)
         f = st.file_uploader(
-            "file",
+            " ",
             type=["pdf", "docx", "pptx", "xlsx", "csv", "txt"],
-            label_visibility="collapsed"
+            label_visibility="hidden"
         )
 
         if f:
