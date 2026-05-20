@@ -88,6 +88,7 @@ def init(deps):
         "pending_prompts": "",
         "answer_mode": "detailed",
         "multi_docs": [],
+        "active_doc_index": 0,
         "last_q": "",
         "last_a": "",
     }
@@ -493,6 +494,9 @@ def process_doc(f, deps) -> bool:
                 "path": tmp_path,
                 "text": text
             })
+            st.session_state.active_doc_index = len(st.session_state.multi_docs) - 1
+        else:
+            st.session_state.active_doc_index = existing.index(f.name)
 
         return True
 
@@ -1197,6 +1201,36 @@ def main():
 
         if st.session_state.doc_ready:
             st.markdown("---")
+            st.markdown(
+                "<span class='sec-lbl'>Add Another Document</span>",
+                unsafe_allow_html=True
+            )
+            f2 = st.file_uploader(
+                " ",
+                type=["pdf", "docx", "pptx", "xlsx", "csv", "txt"],
+                label_visibility="hidden",
+                key="second_uploader"
+            )
+            if f2:
+                kb2 = f2.size / 1024
+                st.markdown(
+                    f"<div class='doc-card'><div class='doc-card-name'>📄 {f2.name}</div>"
+                    f"<div class='doc-card-size'>{kb2:.0f} KB</div></div>",
+                    unsafe_allow_html=True
+                )
+                if st.button("Add Document →", use_container_width=True, key="add_doc2"):
+                    existing = [d["name"] for d in st.session_state.multi_docs]
+                    if f2.name not in existing:
+                        with st.spinner("Processing additional document..."):
+                            success = process_doc(f2, deps)
+                        if success:
+                            st.success(f"✅ {f2.name} added!")
+                            st.rerun()
+                    else:
+                        st.info("This document is already loaded.")
+
+        if st.session_state.doc_ready:
+            st.markdown("---")
             st.markdown("<span class='sec-lbl'>Answer Style</span>", unsafe_allow_html=True)
             mode = st.selectbox(
                 "m",
@@ -1265,6 +1299,81 @@ def main():
     if not st.session_state.doc_ready:
         show_hero()
         return
+
+    if len(st.session_state.multi_docs) > 0:
+        st.markdown("""
+        <div style='background:rgba(99,102,241,0.05);border:1px solid rgba(99,102,241,0.12);
+        border-radius:12px;padding:16px;margin-bottom:16px;'>
+        <div style='color:rgba(99,102,241,0.7);font-size:0.62rem;font-weight:700;
+        text-transform:uppercase;letter-spacing:2px;margin-bottom:10px;'>
+        Uploaded Documents
+        </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        for i, doc in enumerate(st.session_state.multi_docs):
+            col_doc, col_sel = st.columns([4, 1])
+            with col_doc:
+                is_active = doc["name"] == st.session_state.doc_name
+                color = "#3fb950" if is_active else "#94a3b8"
+                indicator = "●" if is_active else "○"
+                st.markdown(
+                    f"<div style='color:{color};font-size:0.8rem;padding:6px 0;'>"
+                    f"{indicator} 📄 {doc['name']}</div>",
+                    unsafe_allow_html=True
+                )
+            with col_sel:
+                if not is_active:
+                    if st.button("Switch", key=f"sw_{i}"):
+                        st.session_state.active_doc_index = i
+                        st.session_state.doc_name = doc["name"]
+                        st.session_state.file_path = doc["path"]
+                        st.session_state.doc_text = doc["text"]
+                        st.session_state.memory = (
+                            st.session_state.fmm.get_memory(doc["name"])
+                        )
+                        st.rerun()
+
+        if len(st.session_state.multi_docs) > 1:
+            st.markdown("---")
+            st.markdown(
+                "<p style='color:rgba(99,102,241,0.6);font-size:0.7rem;font-weight:700;"
+                "text-transform:uppercase;letter-spacing:2px;margin-bottom:8px;'>"
+                "Multi-Document Query</p>",
+                unsafe_allow_html=True
+            )
+
+            mq = st.text_input(
+                "Ask across all documents:",
+                placeholder="e.g. Compare all documents, Find common themes...",
+                key="multi_q"
+            )
+
+            col_mq1, col_mq2 = st.columns(2)
+            with col_mq1:
+                if st.button("🔍 Query All Documents", use_container_width=True):
+                    if mq:
+                        with st.spinner(f"Querying {len(st.session_state.multi_docs)} documents..."):
+                            fn = lazy("agents.multi_document_agent", "query_multiple_documents")
+                            ans = fn(mq, st.session_state.multi_docs)
+                        show_msg("assistant", ans, tts=True)
+                        st.session_state.chat.append({
+                            "role": "assistant",
+                            "content": f"**Multi-Document Answer:**\n\n{ans}"
+                        })
+
+            with col_mq2:
+                if st.button("📊 Compare All Documents", use_container_width=True):
+                    with st.spinner("Comparing all documents..."):
+                        fn = lazy("agents.multi_document_agent", "compare_documents")
+                        comparison = fn(st.session_state.multi_docs)
+                    show_msg("assistant", comparison, tts=True)
+                    st.session_state.chat.append({
+                        "role": "assistant",
+                        "content": f"**Document Comparison:**\n\n{comparison}"
+                    })
+
+        st.markdown("---")
 
     if st.session_state.prompts:
         st.markdown(
