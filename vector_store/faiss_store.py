@@ -4,18 +4,29 @@ from langchain_community.vectorstores import FAISS
 from embeddings.embedding_model import get_embedding_model
 from loguru import logger
 
-
 DB_PATH = "vector_db"
 
 
 def create_vector_store(chunks: list[str]) -> FAISS:
-    logger.info("Creating FAISS vector store...")
+    logger.info(f"Creating FAISS vector store with {len(chunks)} chunks...")
     embedding_model = get_embedding_model()
-    vector_store = FAISS.from_texts(chunks, embedding_model)
+
+    batch_size = 50
+    if len(chunks) <= batch_size:
+        vector_store = FAISS.from_texts(chunks, embedding_model)
+    else:
+        first_batch = chunks[:batch_size]
+        vector_store = FAISS.from_texts(first_batch, embedding_model)
+        for i in range(batch_size, len(chunks), batch_size):
+            batch = chunks[i:i + batch_size]
+            batch_store = FAISS.from_texts(batch, embedding_model)
+            vector_store.merge_from(batch_store)
+            logger.info(f"Processed {min(i + batch_size, len(chunks))}/{len(chunks)} chunks")
+
     os.makedirs(DB_PATH, exist_ok=True)
     vector_store.save_local(DB_PATH)
-    logger.info(f"Vector store saved to {DB_PATH}")
     get_cached_vector_store.clear()
+    logger.info("FAISS vector store created and saved")
     return vector_store
 
 
