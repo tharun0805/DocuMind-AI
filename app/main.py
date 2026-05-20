@@ -5,7 +5,7 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ["TRANSFORMERS_VERBOSITY"] = "error"
 os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
 os.environ["TRANSFORMERS_NO_ADVISORY_WARNINGS"] = "1"
-os.environ["DISABLE_TELEMETRY"] = "1"
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -24,6 +24,12 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+
+@st.cache_resource(show_spinner=False)
+def load_embedding_model():
+    from embeddings.embedding_model import get_embedding_model
+    return get_embedding_model()
 
 
 @st.cache_resource(show_spinner=False)
@@ -465,26 +471,39 @@ def process_doc(f, deps) -> bool:
         st.session_state.file_path = tmp_path
         st.session_state.doc_name = f.name
 
-        pb = st.progress(0, "📖 Reading...")
+        steps = st.empty()
+
+        steps.markdown(
+            "<p style='color:#a5b4fc;font-size:0.82rem;'>📖 Reading document...</p>",
+            unsafe_allow_html=True
+        )
         text = deps["load_document"](tmp_path)
         st.session_state.doc_text = text
 
-        pb.progress(30, "✂️ Chunking...")
+        steps.markdown(
+            "<p style='color:#a5b4fc;font-size:0.82rem;'>✂️ Chunking text...</p>",
+            unsafe_allow_html=True
+        )
         chunks = deps["chunk_text"](text)
 
-        pb.progress(55, "🔢 Building indexes in parallel...")
+        steps.markdown(
+            "<p style='color:#a5b4fc;font-size:0.82rem;'>🔢 Building search indexes...</p>",
+            unsafe_allow_html=True
+        )
+
         with ThreadPoolExecutor(max_workers=2) as executor:
             fut1 = executor.submit(deps["create_vector_store"], chunks)
             fut2 = executor.submit(deps["create_bm25_index"], chunks)
             fut1.result()
             fut2.result()
 
-        pb.progress(85, "💡 Generating smart prompts...")
+        steps.markdown(
+            "<p style='color:#a5b4fc;font-size:0.82rem;'>💡 Generating smart prompts...</p>",
+            unsafe_allow_html=True
+        )
         st.session_state.prompts = gen_prompts(text)
 
-        pb.progress(100, "✅ Ready!")
-        time.sleep(0.15)
-        pb.empty()
+        steps.empty()
 
         st.session_state.doc_ready = True
         st.session_state.chat = []
@@ -497,9 +516,6 @@ def process_doc(f, deps) -> bool:
                 "path": tmp_path,
                 "text": text
             })
-            st.session_state.active_doc_index = len(st.session_state.multi_docs) - 1
-        else:
-            st.session_state.active_doc_index = existing.index(f.name)
 
         return True
 
@@ -1165,6 +1181,7 @@ def main():
     st.markdown(CSS, unsafe_allow_html=True)
     st.markdown(SIDEBAR_CSS, unsafe_allow_html=True)
 
+    load_embedding_model()
     deps = load_core()
     init(deps)
     if st.session_state.get("pending_prompts") and not st.session_state.prompts:
