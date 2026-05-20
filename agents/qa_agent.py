@@ -13,50 +13,44 @@ def generate_answer(
     logger.info(f"Generating answer in mode: {answer_mode}")
 
     mode_instructions = {
-        "detailed": "Give a thorough well structured detailed answer. Explain concepts clearly and make sure the user fully understands.",
-        "quick": "Give a short direct answer in 2-3 sentences maximum.",
-        "bullet": "Give the answer as clear concise bullet points only.",
-        "beginner": "Explain in very simple language. Use analogies and avoid jargon.",
-        "executive": "Give a brief executive summary focused on key decisions and outcomes.",
-        "table": "Present the answer as a structured markdown table where possible."
+        "detailed": "Give a thorough, well-structured, detailed answer. Explain concepts clearly with examples.",
+        "quick": "Give a short direct answer in 2-3 sentences. Focus on the key point only.",
+        "bullet": "Give the answer as clear concise bullet points. Each point should be meaningful.",
+        "beginner": "Explain in very simple language a beginner can understand. Use analogies and simple words.",
+        "executive": "Give a brief executive summary. Focus on key decisions, outcomes and recommendations.",
+        "table": "Present the answer as a structured markdown table where appropriate."
     }
 
     mode_text = mode_instructions.get(answer_mode, mode_instructions["detailed"])
 
-    base_template = """
-    You are DocuMind AI — an expert document analyst and intelligent assistant.
+    base = """
+You are DocuMind AI - an expert document analyst and intelligent assistant.
 
-    Your job is to:
-    - UNDERSTAND the document content deeply
-    - EXPLAIN it clearly in your own words
-    - SUMMARIZE complex information simply
-    - CONNECT related pieces of information together
-    - ANSWER general questions by relating them to the document context
-    - If exact information is not in the document use the context to give a helpful general answer
+CRITICAL RULES:
+- You MUST always provide a helpful answer
+- If the exact information is not in the document context, use the context to give the BEST POSSIBLE related answer
+- NEVER say "I could not find this information" - always explain what IS in the document instead
+- NEVER copy raw text - always explain in your own clear words
+- ALWAYS summarize and explain, not copy-paste
+- Connect related pieces of information intelligently
+- End EVERY answer with: "Key Takeaway: [one clear sentence]"
 
-    Output style: {mode_text}
-
-    Rules:
-    - Never paste raw text from the document
-    - Always explain in clear natural language
-    - If exact answer not found say: "This is not directly covered in the document, but based on the content:"
-    - Always end with: Key Takeaway: [one clear sentence]
-    """
+Output style: {mode_text}
+"""
 
     if chat_history:
         prompt = PromptTemplate(
             input_variables=["context", "question", "chat_history", "mode_text"],
-            template=base_template + """
-            Previous Conversation:
-            {chat_history}
+            template=base + """
+Previous Conversation:
+{chat_history}
 
-            Document Content:
-            {context}
+Document Content:
+{context}
 
-            Question: {question}
+Question: {question}
 
-            Answer:
-            """
+Answer:"""
         )
         inputs = {
             "context": context,
@@ -67,14 +61,13 @@ def generate_answer(
     else:
         prompt = PromptTemplate(
             input_variables=["context", "question", "mode_text"],
-            template=base_template + """
-            Document Content:
-            {context}
+            template=base + """
+Document Content:
+{context}
 
-            Question: {question}
+Question: {question}
 
-            Answer:
-            """
+Answer:"""
         )
         inputs = {
             "context": context,
@@ -89,13 +82,16 @@ def generate_answer(
             result = chain.invoke(inputs)
             answer_text = result.content.strip()
             logger.info("Answer generated successfully")
+
             chunks = [c.strip() for c in context.split("\n\n") if c.strip()]
             evidence = chunks[:3]
+
             return {
                 "answer": answer_text,
                 "evidence": evidence,
                 "mode": answer_mode
             }
+
         except Exception as e:
             if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
                 wait_time = 60 * (attempt + 1)
@@ -105,7 +101,7 @@ def generate_answer(
                 raise e
 
     return {
-        "answer": "Could not generate answer. Please try again.",
+        "answer": "I encountered an error generating the answer. Please try again.",
         "evidence": [],
         "mode": answer_mode
     }
