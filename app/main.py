@@ -1,10 +1,13 @@
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Set environment variables before any imports
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ["TRANSFORMERS_VERBOSITY"] = "error"
+os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
+os.environ["TRANSFORMERS_NO_ADVISORY_WARNINGS"] = "1"
+os.environ["DISABLE_TELEMETRY"] = "1"
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import streamlit as st
 import streamlit.components.v1 as components
