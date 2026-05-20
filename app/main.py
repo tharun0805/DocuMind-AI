@@ -1,4 +1,4 @@
-﻿import sys
+import sys
 import os
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -98,16 +98,6 @@ def init(deps):
     for k, v in defaults.items():
         if k not in st.session_state:
             st.session_state[k] = v
-
-
-def detect_intent(q: str) -> dict:
-    ql = q.lower()
-    return {
-        "chart": any(w in ql for w in ["chart", "graph", "plot", "visual", "bar", "pie", "line", "graphical", "diagram", "visualize", "show me data", "animate"]),
-        "quiz": any(w in ql for w in ["quiz", "test", "mcq", "exam", "question me", "ask me"]),
-        "export": any(w in ql for w in ["download", "export", "save", "generate file", "create pdf", "make pdf", "create doc", "make excel", "generate excel", "create csv"]),
-        "resources": True,
-    }
 
 
 def detect_generation_intent(q: str) -> dict:
@@ -499,20 +489,20 @@ def process_doc(f, deps) -> bool:
         info = st.empty()
 
         info.markdown(
-            "<p style='color:#a5b4fc;font-size:0.82rem;'>📖 Reading...</p>",
+            "<p style='color:#a5b4fc;font-size:0.82rem;'>?? Reading...</p>",
             unsafe_allow_html=True
         )
         text = deps["load_document"](tmp_path)
         st.session_state.doc_text = text
 
         info.markdown(
-            "<p style='color:#a5b4fc;font-size:0.82rem;'>✂️ Chunking...</p>",
+            "<p style='color:#a5b4fc;font-size:0.82rem;'>?? Chunking...</p>",
             unsafe_allow_html=True
         )
         chunks = deps["chunk_text"](text)
 
         info.markdown(
-            "<p style='color:#a5b4fc;font-size:0.82rem;'>🔢 Indexing in parallel...</p>",
+            "<p style='color:#a5b4fc;font-size:0.82rem;'>?? Indexing in parallel...</p>",
             unsafe_allow_html=True
         )
         with ThreadPoolExecutor(max_workers=2) as executor:
@@ -522,7 +512,7 @@ def process_doc(f, deps) -> bool:
             f2.result()
 
         info.markdown(
-            "<p style='color:#a5b4fc;font-size:0.82rem;'>💡 Generating prompts...</p>",
+            "<p style='color:#a5b4fc;font-size:0.82rem;'>?? Generating prompts...</p>",
             unsafe_allow_html=True
         )
         st.session_state.prompts = gen_prompts(text)
@@ -545,7 +535,6 @@ def process_doc(f, deps) -> bool:
     except Exception as e:
         st.error(f"Error: {str(e)}")
         return False
-
 
 def show_msg(role, content, tts=False):
     if role == "human":
@@ -605,7 +594,7 @@ def answer_q(question: str, deps):
     show_msg("human", question)
     st.session_state.chat.append({"role": "human", "content": question})
 
-    with st.spinner("ðŸ§  Thinking..."):
+    with st.spinner("\U0001f9e0 Thinking..."):
         try:
             result = deps["run_workflow"](
                 question=question,
@@ -640,7 +629,7 @@ def answer_q(question: str, deps):
     st.session_state.last_a = answer
 
     if intent["chart"]:
-        with st.spinner("ðŸ“Š Generating charts..."):
+        with st.spinner("\U0001f4ca Generating charts..."):
             charts = gen_multiple_charts(st.session_state.doc_text, question)
         if charts:
             if len(charts) == 1:
@@ -658,10 +647,10 @@ def answer_q(question: str, deps):
                 st.info("No numerical data found for chart generation.")
 
     if intent["quiz"]:
-        with st.spinner("ðŸ§© Generating quiz..."):
+        with st.spinner("\U0001f9e9 Generating quiz..."):
             quiz = gen_quiz(st.session_state.doc_text)
         if quiz:
-            st.markdown("### ðŸ§© Quiz")
+            st.markdown("### \U0001f9e9 Quiz")
             for i, q in enumerate(quiz, 1):
                 st.markdown(
                     f"<div style='background:rgba(139,92,246,0.05);"
@@ -685,23 +674,23 @@ def answer_q(question: str, deps):
                     ):
                         correct = q.get("answer", "A")
                         if user and user.startswith(correct):
-                            st.success("âœ… Correct!")
+                            st.success("\u2705 Correct!")
                         else:
                             ct = next(
                                 (f"{o[0]}. {o[1]}" for o in q["options"]
                                  if o[0] == correct), correct
                             )
-                            st.error(f"âŒ Correct: {ct}")
+                            st.error(f"\u274c Correct: {ct}")
 
     if intent["excel"]:
-        st.markdown("### ðŸ“Š Generated Excel File")
+        st.markdown("### \U0001f4ca Generated Excel File")
         from tools.file_export_tool import generate_excel_from_document
         with st.spinner("Creating Excel file from document data..."):
             excel_bytes = generate_excel_from_document(
                 st.session_state.doc_text, question
             )
         st.download_button(
-            "ðŸ“¥ Download Excel File",
+            "\U0001f4e5 Download Excel File",
             data=excel_bytes,
             file_name="documind_generated.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -710,7 +699,7 @@ def answer_q(question: str, deps):
         )
 
     elif intent["pptx"]:
-        st.markdown("### ðŸ“Š Generated PowerPoint")
+        st.markdown("### \U0001f4ca Generated PowerPoint")
         from tools.file_export_tool import export_as_pptx
         with st.spinner("Creating PowerPoint presentation..."):
             pptx_path = export_as_pptx(
@@ -719,7 +708,7 @@ def answer_q(question: str, deps):
             )
         with open(pptx_path, "rb") as f:
             st.download_button(
-                "ðŸ“¥ Download PowerPoint",
+                "\U0001f4e5 Download PowerPoint",
                 data=f,
                 file_name="documind_presentation.pptx",
                 mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
@@ -728,7 +717,7 @@ def answer_q(question: str, deps):
             )
 
     elif intent["export"]:
-        st.markdown("### ðŸ“¥ Download Generated Document")
+        st.markdown("### \U0001f4e5 Download Generated Document")
         ecols = st.columns(5)
         for i, (fmt, label, mime) in enumerate([
             ("txt", "TXT", "text/plain"),
@@ -740,7 +729,7 @@ def answer_q(question: str, deps):
             with ecols[i]:
                 fb = gen_file(answer, fmt)
                 st.download_button(
-                    f"ðŸ“¥ {label}",
+                    f"\U0001f4e5 {label}",
                     data=fb,
                     file_name=f"documind.{fmt}",
                     mime=mime,
