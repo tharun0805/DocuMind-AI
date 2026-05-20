@@ -1,4 +1,4 @@
-import sys
+﻿import sys
 import os
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -20,16 +20,10 @@ from loguru import logger
 
 st.set_page_config(
     page_title="DocuMind AI",
-    page_icon="🧠",
+    page_icon="ðŸ§ ",
     layout="wide",
     initial_sidebar_state="expanded"
 )
-
-
-@st.cache_resource(show_spinner=False)
-def load_embedding_model():
-    from embeddings.embedding_model import get_embedding_model
-    return get_embedding_model()
 
 
 @st.cache_resource(show_spinner=False)
@@ -113,6 +107,37 @@ def detect_intent(q: str) -> dict:
         "quiz": any(w in ql for w in ["quiz", "test", "mcq", "exam", "question me", "ask me"]),
         "export": any(w in ql for w in ["download", "export", "save", "generate file", "create pdf", "make pdf", "create doc", "make excel", "generate excel", "create csv"]),
         "resources": True,
+    }
+
+
+def detect_generation_intent(q: str) -> dict:
+    ql = q.lower()
+    return {
+        "chart": any(w in ql for w in [
+            "chart", "graph", "plot", "visual", "bar", "pie",
+            "line", "graphical", "diagram", "visualize", "animate",
+            "different visual", "visual representation", "show data"
+        ]),
+        "quiz": any(w in ql for w in [
+            "quiz", "test", "mcq", "exam", "question me", "ask me"
+        ]),
+        "export": any(w in ql for w in [
+            "download", "export", "save", "generate file",
+            "create pdf", "make pdf", "create doc", "make excel",
+            "generate excel", "create csv", "generate document",
+            "give me a file", "regenerate", "updated document"
+        ]),
+        "excel": any(w in ql for w in [
+            "excel", "xlsx", "spreadsheet", "generate excel",
+            "create excel", "make excel", "give excel"
+        ]),
+        "pptx": any(w in ql for w in [
+            "ppt", "powerpoint", "presentation", "slides",
+            "create presentation", "make slides"
+        ]),
+        "table": any(w in ql for w in [
+            "table", "tabular", "rows", "columns", "structured"
+        ]),
     }
 
 
@@ -374,7 +399,7 @@ def gen_file(content: str, fmt: str) -> bytes:
     elif fmt == "docx":
         from docx import Document
         doc = Document()
-        doc.add_heading("DocuMind AI — Generated Report", 0)
+        doc.add_heading("DocuMind AI â€” Generated Report", 0)
         for line in content.split("\n"):
             if line.strip():
                 if line.startswith("## "):
@@ -428,8 +453,8 @@ function dmS(){{window.speechSynthesis.cancel();var u=new SpeechSynthesisUtteran
 function dmX(){{window.speechSynthesis.cancel();}}
 </script>
 <div style="display:flex;gap:8px;margin-top:10px;align-items:center;">
-<button onclick="dmS()" style="background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.2);border-radius:8px;color:#a5b4fc;padding:6px 14px;font-size:0.74rem;cursor:pointer;font-family:Inter,sans-serif;font-weight:600;transition:all 0.2s;">🔊 Read Aloud</button>
-<button onclick="dmX()" style="background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.15);border-radius:8px;color:#fca5a5;padding:6px 14px;font-size:0.74rem;cursor:pointer;font-family:Inter,sans-serif;font-weight:600;">⏹ Stop</button>
+<button onclick="dmS()" style="background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.2);border-radius:8px;color:#a5b4fc;padding:6px 14px;font-size:0.74rem;cursor:pointer;font-family:Inter,sans-serif;font-weight:600;transition:all 0.2s;">ðŸ”Š Read Aloud</button>
+<button onclick="dmX()" style="background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.15);border-radius:8px;color:#fca5a5;padding:6px 14px;font-size:0.74rem;cursor:pointer;font-family:Inter,sans-serif;font-weight:600;">â¹ Stop</button>
 </div>"""
 
 
@@ -471,39 +496,37 @@ def process_doc(f, deps) -> bool:
         st.session_state.file_path = tmp_path
         st.session_state.doc_name = f.name
 
-        steps = st.empty()
+        info = st.empty()
 
-        steps.markdown(
-            "<p style='color:#a5b4fc;font-size:0.82rem;'>📖 Reading document...</p>",
+        info.markdown(
+            "<p style='color:#a5b4fc;font-size:0.82rem;'>📖 Reading...</p>",
             unsafe_allow_html=True
         )
         text = deps["load_document"](tmp_path)
         st.session_state.doc_text = text
 
-        steps.markdown(
-            "<p style='color:#a5b4fc;font-size:0.82rem;'>✂️ Chunking text...</p>",
+        info.markdown(
+            "<p style='color:#a5b4fc;font-size:0.82rem;'>✂️ Chunking...</p>",
             unsafe_allow_html=True
         )
         chunks = deps["chunk_text"](text)
 
-        steps.markdown(
-            "<p style='color:#a5b4fc;font-size:0.82rem;'>🔢 Building search indexes...</p>",
+        info.markdown(
+            "<p style='color:#a5b4fc;font-size:0.82rem;'>🔢 Indexing in parallel...</p>",
             unsafe_allow_html=True
         )
-
         with ThreadPoolExecutor(max_workers=2) as executor:
-            fut1 = executor.submit(deps["create_vector_store"], chunks)
-            fut2 = executor.submit(deps["create_bm25_index"], chunks)
-            fut1.result()
-            fut2.result()
+            f1 = executor.submit(deps["create_vector_store"], chunks)
+            f2 = executor.submit(deps["create_bm25_index"], chunks)
+            f1.result()
+            f2.result()
 
-        steps.markdown(
-            "<p style='color:#a5b4fc;font-size:0.82rem;'>💡 Generating smart prompts...</p>",
+        info.markdown(
+            "<p style='color:#a5b4fc;font-size:0.82rem;'>💡 Generating prompts...</p>",
             unsafe_allow_html=True
         )
         st.session_state.prompts = gen_prompts(text)
-
-        steps.empty()
+        info.empty()
 
         st.session_state.doc_ready = True
         st.session_state.chat = []
@@ -520,23 +543,23 @@ def process_doc(f, deps) -> bool:
         return True
 
     except Exception as e:
-        st.error(deps["handle_error"](e, "upload"))
+        st.error(f"Error: {str(e)}")
         return False
 
 
 def show_msg(role, content, tts=False):
     if role == "human":
-        with st.chat_message("user", avatar="👤"):
+        with st.chat_message("user", avatar="ðŸ‘¤"):
             st.markdown(content)
     else:
-        with st.chat_message("assistant", avatar="🧠"):
+        with st.chat_message("assistant", avatar="ðŸ§ "):
             st.markdown(content)
             if tts:
                 components.html(tts_html(content), height=52)
 
 
 def show_resources_section(question: str, answer: str):
-    with st.spinner("🌐 Finding related resources..."):
+    with st.spinner("ðŸŒ Finding related resources..."):
         k = gen_resources(question, answer)
 
     if not k:
@@ -552,24 +575,24 @@ def show_resources_section(question: str, answer: str):
 
     with c1:
         if k.get("youtube"):
-            st.markdown("<span style='font-size:0.75rem;font-weight:700;color:#fca5a5;'>📺 YouTube</span>", unsafe_allow_html=True)
+            st.markdown("<span style='font-size:0.75rem;font-weight:700;color:#fca5a5;'>ðŸ“º YouTube</span>", unsafe_allow_html=True)
             for s in k["youtube"][:3]:
                 url = f"https://www.youtube.com/results?search_query={s.strip().replace(' ', '+')}"
-                st.markdown(f"<div style='background:rgba(239,68,68,0.05);border:1px solid rgba(239,68,68,0.1);border-radius:8px;padding:8px 12px;margin:5px 0;'><a href='{url}' target='_blank' style='color:#fca5a5;text-decoration:none;font-size:0.78rem;font-weight:500;'>▶ {s}</a></div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='background:rgba(239,68,68,0.05);border:1px solid rgba(239,68,68,0.1);border-radius:8px;padding:8px 12px;margin:5px 0;'><a href='{url}' target='_blank' style='color:#fca5a5;text-decoration:none;font-size:0.78rem;font-weight:500;'>â–¶ {s}</a></div>", unsafe_allow_html=True)
 
     with c2:
         if k.get("websites"):
-            st.markdown("<span style='font-size:0.75rem;font-weight:700;color:#a5b4fc;'>🔍 Web Search</span>", unsafe_allow_html=True)
+            st.markdown("<span style='font-size:0.75rem;font-weight:700;color:#a5b4fc;'>ðŸ” Web Search</span>", unsafe_allow_html=True)
             for t in k["websites"][:3]:
                 url = f"https://www.google.com/search?q={t.strip().replace(' ', '+')}"
-                st.markdown(f"<div style='background:rgba(99,102,241,0.05);border:1px solid rgba(99,102,241,0.1);border-radius:8px;padding:8px 12px;margin:5px 0;'><a href='{url}' target='_blank' style='color:#a5b4fc;text-decoration:none;font-size:0.78rem;font-weight:500;'>🔗 {t}</a></div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='background:rgba(99,102,241,0.05);border:1px solid rgba(99,102,241,0.1);border-radius:8px;padding:8px 12px;margin:5px 0;'><a href='{url}' target='_blank' style='color:#a5b4fc;text-decoration:none;font-size:0.78rem;font-weight:500;'>ðŸ”— {t}</a></div>", unsafe_allow_html=True)
 
     with c3:
         if k.get("academic"):
-            st.markdown("<span style='font-size:0.75rem;font-weight:700;color:#67e8f9;'>🎓 Academic</span>", unsafe_allow_html=True)
+            st.markdown("<span style='font-size:0.75rem;font-weight:700;color:#67e8f9;'>ðŸŽ“ Academic</span>", unsafe_allow_html=True)
             for s in k["academic"][:2]:
                 url = f"https://scholar.google.com/scholar?q={s.strip().replace(' ', '+')}"
-                st.markdown(f"<div style='background:rgba(6,182,212,0.04);border:1px solid rgba(6,182,212,0.1);border-radius:8px;padding:8px 12px;margin:5px 0;'><a href='{url}' target='_blank' style='color:#67e8f9;text-decoration:none;font-size:0.78rem;font-weight:500;'>📖 {s}</a></div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='background:rgba(6,182,212,0.04);border:1px solid rgba(6,182,212,0.1);border-radius:8px;padding:8px 12px;margin:5px 0;'><a href='{url}' target='_blank' style='color:#67e8f9;text-decoration:none;font-size:0.78rem;font-weight:500;'>ðŸ“– {s}</a></div>", unsafe_allow_html=True)
 
 
 def answer_q(question: str, deps):
@@ -578,11 +601,11 @@ def answer_q(question: str, deps):
         st.warning(msg)
         return
 
-    intent = detect_intent(question)
+    intent = detect_generation_intent(question)
     show_msg("human", question)
     st.session_state.chat.append({"role": "human", "content": question})
 
-    with st.spinner("🧠 Thinking..."):
+    with st.spinner("ðŸ§  Thinking..."):
         try:
             result = deps["run_workflow"](
                 question=question,
@@ -593,7 +616,7 @@ def answer_q(question: str, deps):
             answer = result["answer"]
             evidence = result["evidence"]
         except Exception as e:
-            st.error(deps["handle_error"](e, "workflow"))
+            st.error(f"Error: {str(e)}")
             return
 
     show_msg("assistant", answer, tts=True)
@@ -601,37 +624,54 @@ def answer_q(question: str, deps):
     if evidence:
         with st.expander("Evidence Sources"):
             for i, chunk in enumerate(evidence, 1):
-                st.markdown(f"<div style='background:rgba(99,102,241,0.04);border-left:2px solid rgba(99,102,241,0.3);border-radius:0 8px 8px 0;padding:9px 13px;margin:6px 0;font-size:0.79rem;color:#64748b;line-height:1.55;'><strong style='color:#a5b4fc;'>Source {i}</strong><br>{chunk}</div>", unsafe_allow_html=True)
+                st.markdown(
+                    f"<div style='background:rgba(99,102,241,0.04);"
+                    f"border-left:2px solid rgba(99,102,241,0.3);"
+                    f"border-radius:0 8px 8px 0;padding:9px 13px;"
+                    f"margin:6px 0;font-size:0.79rem;color:#64748b;"
+                    f"line-height:1.55;'>"
+                    f"<strong style='color:#a5b4fc;'>Source {i}</strong>"
+                    f"<br>{chunk}</div>",
+                    unsafe_allow_html=True
+                )
 
     st.session_state.chat.append({"role": "assistant", "content": answer})
     st.session_state.last_q = question
     st.session_state.last_a = answer
 
     if intent["chart"]:
-        with st.spinner("📊 Generating charts from document data..."):
+        with st.spinner("ðŸ“Š Generating charts..."):
             charts = gen_multiple_charts(st.session_state.doc_text, question)
         if charts:
             if len(charts) == 1:
                 st.plotly_chart(charts[0][1], use_container_width=True)
-            else:
-                cols = st.columns(min(len(charts), 2))
-                for i, (title, fig) in enumerate(charts):
-                    with cols[i % 2]:
+            elif len(charts) >= 2:
+                c1, c2 = st.columns(2)
+                for i, (title, fig) in enumerate(charts[:4]):
+                    with (c1 if i % 2 == 0 else c2):
                         st.plotly_chart(fig, use_container_width=True)
         else:
             single = gen_chart(st.session_state.doc_text, question)
             if single:
                 st.plotly_chart(single, use_container_width=True)
             else:
-                st.info("ℹ️ Could not extract numerical data for charts from this document. Try asking a more specific question like 'show me the scores as a bar chart'.")
+                st.info("No numerical data found for chart generation.")
 
     if intent["quiz"]:
-        with st.spinner("🧩 Generating quiz..."):
+        with st.spinner("ðŸ§© Generating quiz..."):
             quiz = gen_quiz(st.session_state.doc_text)
         if quiz:
-            st.markdown("### 🧩 Document Quiz")
+            st.markdown("### ðŸ§© Quiz")
             for i, q in enumerate(quiz, 1):
-                st.markdown(f"<div style='background:rgba(139,92,246,0.05);border:1px solid rgba(139,92,246,0.12);border-radius:12px;padding:16px;margin-bottom:12px;'><div style='color:#e2e8f0;font-size:0.88rem;font-weight:600;margin-bottom:10px;'>Q{i}. {q['question']}</div></div>", unsafe_allow_html=True)
+                st.markdown(
+                    f"<div style='background:rgba(139,92,246,0.05);"
+                    f"border:1px solid rgba(139,92,246,0.12);"
+                    f"border-radius:12px;padding:16px;margin-bottom:12px;'>"
+                    f"<div style='color:#e2e8f0;font-size:0.88rem;"
+                    f"font-weight:600;margin-bottom:10px;'>Q{i}. {q['question']}</div>"
+                    f"</div>",
+                    unsafe_allow_html=True
+                )
                 if q.get("options"):
                     user = st.radio(
                         f"Q{i}",
@@ -639,16 +679,56 @@ def answer_q(question: str, deps):
                         key=f"qr{i}_{len(st.session_state.chat)}",
                         label_visibility="collapsed"
                     )
-                    if st.button(f"Check Q{i}", key=f"qc{i}_{len(st.session_state.chat)}"):
+                    if st.button(
+                        f"Check Q{i}",
+                        key=f"qc{i}_{len(st.session_state.chat)}"
+                    ):
                         correct = q.get("answer", "A")
                         if user and user.startswith(correct):
-                            st.success("✅ Correct!")
+                            st.success("âœ… Correct!")
                         else:
-                            ct = next((f"{o[0]}. {o[1]}" for o in q["options"] if o[0] == correct), correct)
-                            st.error(f"❌ Correct answer: {ct}")
+                            ct = next(
+                                (f"{o[0]}. {o[1]}" for o in q["options"]
+                                 if o[0] == correct), correct
+                            )
+                            st.error(f"âŒ Correct: {ct}")
 
-    if intent["export"]:
-        st.markdown("### 📥 Export Answer")
+    if intent["excel"]:
+        st.markdown("### ðŸ“Š Generated Excel File")
+        from tools.file_export_tool import generate_excel_from_document
+        with st.spinner("Creating Excel file from document data..."):
+            excel_bytes = generate_excel_from_document(
+                st.session_state.doc_text, question
+            )
+        st.download_button(
+            "ðŸ“¥ Download Excel File",
+            data=excel_bytes,
+            file_name="documind_generated.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+            key=f"dl_excel_{len(st.session_state.chat)}"
+        )
+
+    elif intent["pptx"]:
+        st.markdown("### ðŸ“Š Generated PowerPoint")
+        from tools.file_export_tool import export_as_pptx
+        with st.spinner("Creating PowerPoint presentation..."):
+            pptx_path = export_as_pptx(
+                answer,
+                title=st.session_state.doc_name
+            )
+        with open(pptx_path, "rb") as f:
+            st.download_button(
+                "ðŸ“¥ Download PowerPoint",
+                data=f,
+                file_name="documind_presentation.pptx",
+                mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                use_container_width=True,
+                key=f"dl_pptx_{len(st.session_state.chat)}"
+            )
+
+    elif intent["export"]:
+        st.markdown("### ðŸ“¥ Download Generated Document")
         ecols = st.columns(5)
         for i, (fmt, label, mime) in enumerate([
             ("txt", "TXT", "text/plain"),
@@ -660,9 +740,9 @@ def answer_q(question: str, deps):
             with ecols[i]:
                 fb = gen_file(answer, fmt)
                 st.download_button(
-                    f"📥 {label}",
+                    f"ðŸ“¥ {label}",
                     data=fb,
-                    file_name=f"documind_answer.{fmt}",
+                    file_name=f"documind.{fmt}",
                     mime=mime,
                     use_container_width=True,
                     key=f"dl_{fmt}_{len(st.session_state.chat)}"
@@ -683,7 +763,7 @@ html, body, [class*="css"] * {
     background: #04060f !important;
 }
 
-/* ── SIDEBAR ── */
+/* â”€â”€ SIDEBAR â”€â”€ */
 section[data-testid="stSidebar"] {
     background: rgba(4,6,15,0.99) !important;
     border-right: 1px solid rgba(99,102,241,0.08) !important;
@@ -692,7 +772,7 @@ section[data-testid="stSidebar"] * {
     color: #94a3b8 !important;
 }
 
-/* ── FILE UPLOADER FIX ── */
+/* â”€â”€ FILE UPLOADER FIX â”€â”€ */
 [data-testid="stFileUploader"] label,
 [data-testid="stFileUploader"] > div > label {
     display: none !important;
@@ -710,7 +790,7 @@ section[data-testid="stSidebar"] * {
     font-size: 0.72rem !important;
 }
 
-/* ── BUTTONS ── */
+/* â”€â”€ BUTTONS â”€â”€ */
 .stButton > button {
     background: linear-gradient(135deg, #4f46e5, #6366f1) !important;
     color: #fff !important;
@@ -727,7 +807,7 @@ section[data-testid="stSidebar"] * {
     box-shadow: 0 5px 18px rgba(99,102,241,0.3) !important;
 }
 
-/* ── CHAT INPUT ── */
+/* â”€â”€ CHAT INPUT â”€â”€ */
 .stChatInputContainer {
     background: rgba(8,10,22,0.9) !important;
     border: 1px solid rgba(99,102,241,0.15) !important;
@@ -742,32 +822,32 @@ section[data-testid="stSidebar"] * {
     color: #e2e8f0 !important;
 }
 
-/* ── CHAT MESSAGES ── */
+/* â”€â”€ CHAT MESSAGES â”€â”€ */
 div[data-testid="stChatMessage"] {
     background: transparent !important;
 }
 
-/* ── EXPANDER ── */
+/* â”€â”€ EXPANDER â”€â”€ */
 div[data-testid="stExpander"] {
     background: rgba(8,10,22,0.5) !important;
     border: 1px solid rgba(255,255,255,0.04) !important;
     border-radius: 10px !important;
 }
 
-/* ── SELECTBOX ── */
+/* â”€â”€ SELECTBOX â”€â”€ */
 div[data-testid="stSelectbox"] > div > div {
     background: rgba(8,10,22,0.8) !important;
     border: 1px solid rgba(99,102,241,0.14) !important;
     border-radius: 9px !important;
 }
 
-/* ── PROGRESS ── */
+/* â”€â”€ PROGRESS â”€â”€ */
 div[data-testid="stProgressBar"] > div > div {
     background: linear-gradient(90deg, #4f46e5, #06b6d4) !important;
     border-radius: 4px !important;
 }
 
-/* ── ALERTS ── */
+/* â”€â”€ ALERTS â”€â”€ */
 div[data-testid="stSuccess"] {
     background: rgba(16,185,129,0.07) !important;
     border: 1px solid rgba(16,185,129,0.2) !important;
@@ -784,7 +864,7 @@ div[data-testid="stInfo"] {
     border-radius: 10px !important;
 }
 
-/* ── DOWNLOAD BUTTONS ── */
+/* â”€â”€ DOWNLOAD BUTTONS â”€â”€ */
 div[data-testid="stDownloadButton"] > button {
     background: rgba(99,102,241,0.08) !important;
     border: 1px solid rgba(99,102,241,0.2) !important;
@@ -797,7 +877,7 @@ div[data-testid="stDownloadButton"] > button:hover {
     box-shadow: none !important;
 }
 
-/* ── RADIO ── */
+/* â”€â”€ RADIO â”€â”€ */
 div[data-testid="stRadio"] label {
     background: rgba(8,10,22,0.5) !important;
     border: 1px solid rgba(255,255,255,0.05) !important;
@@ -811,12 +891,12 @@ div[data-testid="stRadio"] label:hover {
     border-color: rgba(99,102,241,0.25) !important;
 }
 
-/* ── SPINNER ── */
+/* â”€â”€ SPINNER â”€â”€ */
 div[data-testid="stSpinner"] > div {
     border-top-color: #6366f1 !important;
 }
 
-/* ── SCROLLBAR ── */
+/* â”€â”€ SCROLLBAR â”€â”€ */
 ::-webkit-scrollbar { width: 3px; height: 3px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(99,102,241,0.2); border-radius: 4px; }
@@ -1108,7 +1188,7 @@ h1 {
 
 <p class="subtitle">
     Upload any document. Ask in plain English.<br>
-    Get answers, charts, quizzes, and knowledge — instantly.
+    Get answers, charts, quizzes, and knowledge â€” instantly.
 </p>
 
 <div class="stats">
@@ -1132,44 +1212,44 @@ h1 {
 
 <div class="grid">
     <div class="card">
-        <span class="ic">📊</span>
+        <span class="ic">ðŸ“Š</span>
         <div class="nm">Auto Charts</div>
-        <div class="tx">Say "show chart" — real Plotly graphs generated instantly</div>
+        <div class="tx">Say "show chart" â€” real Plotly graphs generated instantly</div>
     </div>
     <div class="card">
-        <span class="ic">🧩</span>
+        <span class="ic">ðŸ§©</span>
         <div class="nm">Quiz Mode</div>
-        <div class="tx">Say "give me a quiz" — MCQ questions from document</div>
+        <div class="tx">Say "give me a quiz" â€” MCQ questions from document</div>
     </div>
     <div class="card">
-        <span class="ic">🔊</span>
+        <span class="ic">ðŸ”Š</span>
         <div class="nm">Read Aloud</div>
         <div class="tx">Every answer spoken aloud by browser TTS</div>
     </div>
     <div class="card">
-        <span class="ic">🌐</span>
+        <span class="ic">ðŸŒ</span>
         <div class="nm">Live Resources</div>
         <div class="tx">YouTube + Google + Scholar links after every answer</div>
     </div>
     <div class="card">
-        <span class="ic">📥</span>
+        <span class="ic">ðŸ“¥</span>
         <div class="nm">Export Anything</div>
-        <div class="tx">PDF, DOCX, Excel, CSV — just ask to download</div>
+        <div class="tx">PDF, DOCX, Excel, CSV â€” just ask to download</div>
     </div>
     <div class="card">
-        <span class="ic">💡</span>
+        <span class="ic">ðŸ’¡</span>
         <div class="nm">Smart Prompts</div>
         <div class="tx">Auto-generated questions from your document</div>
     </div>
     <div class="card">
-        <span class="ic">🔍</span>
+        <span class="ic">ðŸ”</span>
         <div class="nm">Hybrid Search</div>
         <div class="tx">FAISS semantic + BM25 keyword with RRF reranking</div>
     </div>
     <div class="card">
-        <span class="ic">🔒</span>
+        <span class="ic">ðŸ”’</span>
         <div class="nm">100% Private</div>
-        <div class="tx">Documents never leave your machine — ever</div>
+        <div class="tx">Documents never leave your machine â€” ever</div>
     </div>
 </div>
 </body>
@@ -1181,7 +1261,6 @@ def main():
     st.markdown(CSS, unsafe_allow_html=True)
     st.markdown(SIDEBAR_CSS, unsafe_allow_html=True)
 
-    load_embedding_model()
     deps = load_core()
     init(deps)
     if st.session_state.get("pending_prompts") and not st.session_state.prompts:
@@ -1191,7 +1270,7 @@ def main():
     with st.sidebar:
         st.markdown("""
         <div class='dm-logo'>
-            <div class='dm-icon-wrap'>🧠</div>
+            <div class='dm-icon-wrap'>ðŸ§ </div>
             <div>
                 <div class='dm-name-text'>DocuMind AI</div>
                 <div class='dm-sub-text'>Document Intelligence</div>
@@ -1210,13 +1289,13 @@ def main():
             kb = f.size / 1024
             st.markdown(f"""
             <div class='doc-card'>
-                <div class='doc-card-name'>📄 {f.name}</div>
+                <div class='doc-card-name'>ðŸ“„ {f.name}</div>
                 <div class='doc-card-size'>{kb:.0f} KB</div>
             </div>
             """, unsafe_allow_html=True)
-            if st.button("Process Document →", use_container_width=True):
+            if st.button("Process Document â†’", use_container_width=True):
                 if process_doc(f, deps):
-                    st.success("✅ Document ready")
+                    st.success("âœ… Document ready")
                     st.rerun()
 
         if st.session_state.doc_ready:
@@ -1234,17 +1313,17 @@ def main():
             if f2:
                 kb2 = f2.size / 1024
                 st.markdown(
-                    f"<div class='doc-card'><div class='doc-card-name'>📄 {f2.name}</div>"
+                    f"<div class='doc-card'><div class='doc-card-name'>ðŸ“„ {f2.name}</div>"
                     f"<div class='doc-card-size'>{kb2:.0f} KB</div></div>",
                     unsafe_allow_html=True
                 )
-                if st.button("Add Document →", use_container_width=True, key="add_doc2"):
+                if st.button("Add Document â†’", use_container_width=True, key="add_doc2"):
                     existing = [d["name"] for d in st.session_state.multi_docs]
                     if f2.name not in existing:
                         with st.spinner("Processing additional document..."):
                             success = process_doc(f2, deps)
                         if success:
-                            st.success(f"✅ {f2.name} added!")
+                            st.success(f"âœ… {f2.name} added!")
                             st.rerun()
                     else:
                         st.info("This document is already loaded.")
@@ -1256,12 +1335,12 @@ def main():
                 "m",
                 options=["detailed", "quick", "bullet", "beginner", "executive", "table"],
                 format_func=lambda x: {
-                    "detailed": "📝 Detailed",
-                    "quick": "⚡ Quick",
-                    "bullet": "• Bullets",
-                    "beginner": "🎓 Beginner",
-                    "executive": "💼 Executive",
-                    "table": "📊 Table"
+                    "detailed": "ðŸ“ Detailed",
+                    "quick": "âš¡ Quick",
+                    "bullet": "â€¢ Bullets",
+                    "beginner": "ðŸŽ“ Beginner",
+                    "executive": "ðŸ’¼ Executive",
+                    "table": "ðŸ“Š Table"
                 }[x],
                 label_visibility="collapsed"
             )
@@ -1271,7 +1350,7 @@ def main():
             st.markdown("<span class='sec-lbl'>Active Document</span>", unsafe_allow_html=True)
             st.markdown(f"""
             <div class='doc-card'>
-                <div class='doc-card-name'>📄 {st.session_state.doc_name}</div>
+                <div class='doc-card-name'>ðŸ“„ {st.session_state.doc_name}</div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -1287,12 +1366,12 @@ def main():
             st.markdown("<span class='sec-lbl'>Quick Actions</span>", unsafe_allow_html=True)
 
             for act in [
-                "📝 Summarize document",
-                "✅ Extract action items",
-                "⚠️ Identify all risks",
-                "📊 Show data as charts",
-                "❓ Generate FAQ",
-                "🧩 Create a quiz"
+                "ðŸ“ Summarize document",
+                "âœ… Extract action items",
+                "âš ï¸ Identify all risks",
+                "ðŸ“Š Show data as charts",
+                "â“ Generate FAQ",
+                "ðŸ§© Create a quiz"
             ]:
                 if st.button(act, use_container_width=True, key=f"qa{act[:6]}"):
                     answer_q(act, deps)
@@ -1301,12 +1380,12 @@ def main():
             st.markdown("---")
             c1, c2 = st.columns(2)
             with c1:
-                if st.button("🗑️ Clear", use_container_width=True):
+                if st.button("ðŸ—‘ï¸ Clear", use_container_width=True):
                     st.session_state.memory.clear()
                     st.session_state.chat = []
                     st.rerun()
             with c2:
-                if st.button("📂 New", use_container_width=True):
+                if st.button("ðŸ“‚ New", use_container_width=True):
                     st.session_state.doc_ready = False
                     st.session_state.file_path = ""
                     st.session_state.doc_name = ""
@@ -1336,10 +1415,10 @@ def main():
             with col_doc:
                 is_active = doc["name"] == st.session_state.doc_name
                 color = "#3fb950" if is_active else "#94a3b8"
-                indicator = "●" if is_active else "○"
+                indicator = "â—" if is_active else "â—‹"
                 st.markdown(
                     f"<div style='color:{color};font-size:0.8rem;padding:6px 0;'>"
-                    f"{indicator} 📄 {doc['name']}</div>",
+                    f"{indicator} ðŸ“„ {doc['name']}</div>",
                     unsafe_allow_html=True
                 )
             with col_sel:
@@ -1371,7 +1450,7 @@ def main():
 
             col_mq1, col_mq2 = st.columns(2)
             with col_mq1:
-                if st.button("🔍 Query All Documents", use_container_width=True):
+                if st.button("ðŸ” Query All Documents", use_container_width=True):
                     if mq:
                         with st.spinner(f"Querying {len(st.session_state.multi_docs)} documents..."):
                             fn = lazy("agents.multi_document_agent", "query_multiple_documents")
@@ -1383,7 +1462,7 @@ def main():
                         })
 
             with col_mq2:
-                if st.button("📊 Compare All Documents", use_container_width=True):
+                if st.button("ðŸ“Š Compare All Documents", use_container_width=True):
                     with st.spinner("Comparing all documents..."):
                         fn = lazy("agents.multi_document_agent", "compare_documents")
                         comparison = fn(st.session_state.multi_docs)
@@ -1397,7 +1476,7 @@ def main():
 
     if st.session_state.prompts:
         st.markdown(
-            "<p style='color:rgba(99,102,241,0.6);font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:2px;margin-bottom:10px;'>💡 Suggested from your document</p>",
+            "<p style='color:rgba(99,102,241,0.6);font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:2px;margin-bottom:10px;'>ðŸ’¡ Suggested from your document</p>",
             unsafe_allow_html=True
         )
         cols = st.columns(3)
@@ -1414,7 +1493,7 @@ def main():
     col_in, col_v = st.columns([6, 1])
     with col_in:
         question = st.chat_input(
-            "Ask anything — type 'show chart', 'give me a quiz', 'download as pdf' for special features..."
+            "Ask anything â€” type 'show chart', 'give me a quiz', 'download as pdf' for special features..."
         )
     with col_v:
         try:
@@ -1424,18 +1503,18 @@ def main():
         if is_https:
             try:
                 from streamlit_mic_recorder import mic_recorder
-                audio = mic_recorder(start_prompt="🎤", stop_prompt="⏹️", key="voice")
+                audio = mic_recorder(start_prompt="ðŸŽ¤", stop_prompt="â¹ï¸", key="voice")
                 if audio and audio.get("bytes"):
                     fn = lazy("agents.voice_agent", "transcribe_audio_file")
                     vr = fn(audio["bytes"])
                     if vr["success"]:
                         question = vr["text"]
-                        st.success(f"🎤 {question}")
+                        st.success(f"ðŸŽ¤ {question}")
             except Exception:
-                st.button("🎤", help="Voice unavailable")
+                st.button("ðŸŽ¤", help="Voice unavailable")
         else:
-            if st.button("🎤", help="Voice works after HTTPS deployment"):
-                st.info("🎤 Voice works on Streamlit Cloud")
+            if st.button("ðŸŽ¤", help="Voice works after HTTPS deployment"):
+                st.info("ðŸŽ¤ Voice works on Streamlit Cloud")
 
     if question:
         answer_q(question, deps)
@@ -1443,3 +1522,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
