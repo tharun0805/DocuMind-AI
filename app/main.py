@@ -1,5 +1,6 @@
 ﻿import sys
 import os
+from unittest import result
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ["TRANSFORMERS_VERBOSITY"] = "error"
 os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
@@ -1583,16 +1584,20 @@ def process_doc(f, deps):
         step(50, f"Created {len(chunks)} chunks")
 
         step(55, "Building search index...")
-        # BM25 and prompt generation run in parallel — both are fast
-        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
-            bm25_f = pool.submit(deps["create_bm25_index"], chunks)
-            pmt_f  = pool.submit(gen_prompts, text)
-            bm25_f.result()                        # wait for BM25 (< 2 s)
-            step(85, "Index ready!")
+        # BM25 builds fast — wait for it
+        deps["create_bm25_index"](chunks)
+        step(85, "Index ready!")
+
+        # Use default prompts immediately — generate real ones in background
+        prompts = _default_prompts()
+        def _gen_prompts_bg():
             try:
-                prompts = pmt_f.result(timeout=20)
+                result = gen_prompts(text)
+                if result:
+                    st.session_state.prompts = result
             except Exception:
-                prompts = _default_prompts()
+                pass
+        threading.Thread(target=_gen_prompts_bg, daemon=True).start()
 
         step(100, "Done — document ready!")
         st.session_state["_doc_hash"] = file_hash
