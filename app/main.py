@@ -145,6 +145,8 @@ def init(deps):
         "stop_requested": False,
         "_processing": False,
         "_stop_flag": False,
+        "startup_checked": False,
+        "startup_results": {},
     }
     for k, v in simple.items():
         if k not in st.session_state:
@@ -2208,6 +2210,7 @@ Use markdown formatting with tables where helpful."""
 def _show_upload_sidebar_only():
     """Lightweight sidebar shown on hero page — zero heavy imports."""
     with st.sidebar:
+        render_startup_warnings()
         st.markdown("""
 <div class='dm-logo'>
   <div style='flex-shrink:0;'>
@@ -2274,6 +2277,27 @@ def _show_upload_sidebar_only():
                 st.session_state["_pending_files"] = files
                 st.rerun()
 
+def show_startup_check():
+    if st.session_state.get("startup_checked"):
+        return
+    try:
+        from utils.config import validate_startup
+        results = validate_startup()
+        st.session_state["startup_results"] = results
+        st.session_state["startup_checked"] = True
+    except Exception as e:
+        logger.error(f"Startup check failed: {e}")
+        st.session_state["startup_checked"] = True
+        st.session_state["startup_results"] = {"errors": [str(e)], "warnings": []}
+
+
+def render_startup_warnings():
+    results = st.session_state.get("startup_results", {})
+    for err in results.get("errors", []):
+        st.sidebar.error(f"Setup Error: {err}")
+    for warn in results.get("warnings", []):
+        st.sidebar.warning(warn)
+
 
 def main():
 
@@ -2294,6 +2318,7 @@ def main():
 
 
     deps = load_core()
+    show_startup_check()
     init(deps)
 
 
