@@ -1,0 +1,28 @@
+# Secrets
+.env
+
+# Virtual environment
+venv/
+
+# Cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Git
+.git/
+.gitignore
+
+# Logs
+logs/
+
+# Vector DB — rebuilt inside container
+vector_db/
+
+# Models — mounted as volume
+models/
+
+# Dev files
+.vscode/
+tests/
+*.md
