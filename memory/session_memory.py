@@ -4,21 +4,15 @@ from loguru import logger
 class SessionMemory:
     def __init__(self):
         self.history = []
-        logger.info("Session memory initialized")
+        logger.debug("Session memory initialized")
 
     def add_human_message(self, message: str) -> None:
-        self.history.append({
-            "role": "human",
-            "content": message
-        })
-        logger.info(f"Human message added to memory: {message[:50]}")
+        self.history.append({"role": "human", "content": message})
+        logger.debug(f"Memory: human msg ({len(message)} chars)")
 
     def add_ai_message(self, message: str) -> None:
-        self.history.append({
-            "role": "assistant",
-            "content": message
-        })
-        logger.info(f"AI message added to memory: {message[:50]}")
+        self.history.append({"role": "assistant", "content": message})
+        logger.debug(f"Memory: ai msg ({len(message)} chars)")
 
     def get_history(self) -> list[dict]:
         return self.history
@@ -26,15 +20,12 @@ class SessionMemory:
     def get_history_as_text(self) -> str:
         if not self.history:
             return ""
-
-        history_text = ""
-        for message in self.history:
-            if message["role"] == "human":
-                history_text += f"Human: {message['content']}\n"
-            else:
-                history_text += f"Assistant: {message['content']}\n"
-
-        return history_text.strip()
+        lines = []
+        for msg in self.history[-10:]:
+            role = "Human" if msg["role"] == "human" else "Assistant"
+            content = msg["content"][:400]
+            lines.append(f"{role}: {content}")
+        return "\n".join(lines)
 
     def clear(self) -> None:
         self.history = []

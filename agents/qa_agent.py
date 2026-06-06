@@ -1,107 +1,117 @@
-import time
+﻿import time
 from langchain_core.prompts import PromptTemplate
-from utils.llm_provider import get_shared_llm
 from loguru import logger
+from utils.llm_provider import get_shared_llm
 
 
 def generate_answer(
     question: str,
     context: str,
     chat_history: str = "",
-    answer_mode: str = "detailed"
+    answer_mode: str = "detailed",
+    doc_text: str = "",
 ) -> dict:
-    logger.info(f"Generating answer in mode: {answer_mode}")
+    logger.debug(f"QA: mode={answer_mode} q={question[:60]}")
 
     mode_instructions = {
-        "detailed": "Give a thorough, well-structured, detailed answer. Explain concepts clearly with examples.",
-        "quick": "Give a short direct answer in 2-3 sentences. Focus on the key point only.",
-        "bullet": "Give the answer as clear concise bullet points. Each point should be meaningful.",
-        "beginner": "Explain in very simple language a beginner can understand. Use analogies and simple words.",
-        "executive": "Give a brief executive summary. Focus on key decisions, outcomes and recommendations.",
-        "table": "Present the answer as a structured markdown table where appropriate."
+        "detailed":  "Write a thorough, well-structured answer with all relevant details.",
+        "quick":     "Answer in 2-4 sentences. Direct and specific.",
+        "bullet":    "Clear bullet points with specific facts from the document.",
+        "beginner":  "Simple everyday language. No jargon. Use analogies if helpful.",
+        "executive": "Key facts only. Brief, direct, actionable.",
+        "table":     "Format as a clean markdown table where data supports it.",
     }
-
     mode_text = mode_instructions.get(answer_mode, mode_instructions["detailed"])
 
-    base = """
-You are DocuMind AI - an expert document analyst and intelligent assistant.
+    effective_context = context or ""
+    if doc_text and len(effective_context.strip()) < 300:
+        effective_context = doc_text[:7000]
+    elif doc_text and len(effective_context) < 1500:
+        effective_context = effective_context + "\n\n" + doc_text[:2500]
 
-CRITICAL RULES:
-- You MUST always provide a helpful answer
-- If the exact information is not in the document context, use the context to give the BEST POSSIBLE related answer
-- NEVER say "I could not find this information" - always explain what IS in the document instead
-- NEVER copy raw text - always explain in your own clear words
-- ALWAYS summarize and explain, not copy-paste
-- Connect related pieces of information intelligently
-- End EVERY answer with: "Key Takeaway: [one clear sentence]"
+    history_block = (
+        f"CONVERSATION HISTORY:\n{chat_history}\n\n" if chat_history else ""
+    )
 
-Output style: {mode_text}
-"""
+    ql = question.lower()
+    is_followup = any(p in ql for p in [
+        "you said", "you told", "you provided", "previously", "earlier",
+        "follow up", "more about", "elaborate", "expand on",
+        "what about", "also tell", "continue",
+    ])
+    followup_note = (
+        "\nThis is a follow-up — build on the previous answer, do not repeat it.\n"
+        if is_followup else ""
+    )
 
-    if chat_history:
-        prompt = PromptTemplate(
-            input_variables=["context", "question", "chat_history", "mode_text"],
-            template=base + """
-Previous Conversation:
-{chat_history}
+    # Rule 4 is intentionally generic: the LLM must read the document's own
+    # scoring ranges and labels — never assume any fixed classification system.
+    tpl = """You are DocuMind AI — a highly intelligent, domain-agnostic document analyst.
+You work with ANY type of document: books, reports, surveys, legal, financial, scientific, etc.
 
-Document Content:
+RETRIEVED DOCUMENT CONTENT:
 {context}
 
-Question: {question}
+{history_block}{followup_note}QUESTION: {question}
 
-Answer:"""
-        )
-        inputs = {
-            "context": context,
-            "question": question,
-            "chat_history": chat_history,
-            "mode_text": mode_text
-        }
-    else:
-        prompt = PromptTemplate(
-            input_variables=["context", "question", "mode_text"],
-            template=base + """
-Document Content:
-{context}
+RESPONSE STYLE: {mode_text}
 
-Question: {question}
+RULES:
+1. Answer using ONLY the retrieved content above — never hallucinate
+2. Be specific — use actual facts, names, numbers, and concepts from the document
+3. Adapt intelligently to the document type:
+   • Book/article → key concepts, arguments, examples, actionable insights
+   • Survey/questionnaire → patterns, totals, comparisons, findings
+   • Legal/financial → terms, clauses, figures, implications
+   • Scientific → methodology, findings, conclusions, significance
+4. For any scored or assessed data: read the scoring system from the document
+   itself — use the ranges, labels, and categories the document defines,
+   never assume a fixed classification system
+5. Structure clearly — use sections/bullets only when it aids comprehension
+6. Never add "Introduction" or "Conclusion" headers unless asked for a report
+7. For follow-ups: build on prior context, never repeat yourself
+8. If content is insufficient, say what IS known and what needs clarification
+9. Match length to complexity — simple question = concise answer
 
-Answer:"""
-        )
-        inputs = {
-            "context": context,
-            "question": question,
-            "mode_text": mode_text
-        }
+ANSWER:"""
 
     for attempt in range(3):
         try:
-            llm = get_shared_llm(temperature=0.3)
-            chain = prompt | llm
-            result = chain.invoke(inputs)
-            answer_text = result.content.strip()
-            logger.info("Answer generated successfully")
+            llm    = get_shared_llm(temperature=0.1)
+            prompt = PromptTemplate(
+                input_variables=["context", "question", "mode_text",
+                                 "history_block", "followup_note"],
+                template=tpl,
+            )
+            result = (prompt | llm).invoke({
+                "context":       effective_context[:7000],
+                "question":      question,
+                "mode_text":     mode_text,
+                "history_block": history_block,
+                "followup_note": followup_note,
+            })
+            answer = (result.content.strip()
+                      if hasattr(result, "content") else str(result).strip())
+            if not answer:
+                raise ValueError("empty")
 
-            chunks = [c.strip() for c in context.split("\n\n") if c.strip()]
-            evidence = chunks[:3]
-
-            return {
-                "answer": answer_text,
-                "evidence": evidence,
-                "mode": answer_mode
-            }
+            chunks   = effective_context.split("\n\n---\n\n")
+            evidence = [c.strip() for c in chunks if len(c.strip()) > 80][:4]
+            return {"answer": answer, "evidence": evidence, "mode": answer_mode}
 
         except Exception as e:
-            if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
-                wait_time = 60 * (attempt + 1)
-                logger.warning(f"Rate limit. Waiting {wait_time}s...")
-                time.sleep(wait_time)
+            err = str(e)
+            if "429" in err or "RESOURCE_EXHAUSTED" in err or "rate_limit" in err.lower():
+                wait = 30 * (attempt + 1)
+                logger.warning(f"Rate limit — waiting {wait}s")
+                time.sleep(wait)
             else:
-                raise e
+                logger.error(f"QA error: {e}")
+                if attempt == 2:
+                    break
 
     return {
-        "answer": "I encountered an error generating the answer. Please try again.",
+        "answer": "The AI service is temporarily busy. Please try again.",
         "evidence": [],
-        "mode": answer_mode
+        "mode": answer_mode,
     }

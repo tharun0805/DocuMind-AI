@@ -3,6 +3,7 @@ headless = true
 enableCORS = false
 enableXsrfProtection = false
 maxUploadSize = 2000
+
 fileWatcherType = "none"
 runOnSave = false
 
@@ -10,7 +11,18 @@ runOnSave = false
 gatherUsageStats = false
 
 [runner]
+
 fastReruns = true
+
+magicEnabled = false
+
+[client]
+
+toolbarMode = "minimal"
+
+[logger]
+
+level = "warning"
 
 [theme]
 base = "dark"
