@@ -148,6 +148,8 @@ def init(deps):
         "_stop_flag": False,
         "startup_checked": False,
         "startup_results": {},
+        "prompts_pending": False,
+        "prompts":         [],
     }
     for k, v in simple.items():
         if k not in st.session_state:
@@ -1634,21 +1636,10 @@ def process_doc(f, deps):
         chunks = deps["chunk_text"](text)
         step(50, f"Created {len(chunks)} chunks")
 
-        step(55, "Building search index...")
-        # BM25 builds fast — wait for it
+        step(55, "Building keyword index...")
         deps["create_bm25_index"](chunks)
-        step(85, "Index ready!")
-
-        # Use default prompts immediately — generate real ones in background
-        prompts = _default_prompts()
-        def _gen_prompts_bg():
-            try:
-                result = gen_prompts(text)
-                if result:
-                    st.session_state.prompts = result
-            except Exception:
-                pass
-        threading.Thread(target=_gen_prompts_bg, daemon=True).start()
+        step(90, "Almost ready...")
+        prompts = []
 
         step(100, "Done — document ready!")
         st.session_state["_doc_hash"] = file_hash
@@ -1659,7 +1650,8 @@ def process_doc(f, deps):
         st.session_state.file_path  = tmp_path
         st.session_state.doc_name   = f.name
         st.session_state.doc_text   = text
-        st.session_state.prompts    = prompts
+        st.session_state.prompts         = []
+        st.session_state.prompts_pending = True
         st.session_state.doc_ready  = True          # <── UI unlocks HERE
         st.session_state.chat       = []
         st.session_state.pending    = {}
@@ -2376,6 +2368,18 @@ def main():
     deps = load_core()
     show_startup_check()
     init(deps)
+    # ── Generate smart prompts after document is ready ────────────
+    # Runs in main Streamlit thread so session_state updates correctly.
+    # This is triggered on the first rerun after document upload.
+    if st.session_state.get("prompts_pending") and st.session_state.get("doc_ready"):
+        with st.spinner("Generating smart questions from your document..."):
+            try:
+                result = gen_prompts(st.session_state.doc_text)
+                st.session_state.prompts = result if (result and len(result) >= 2) else _default_prompts()
+            except Exception:
+                st.session_state.prompts = _default_prompts()
+        st.session_state.prompts_pending = False
+        st.rerun()
 
 
     if st.session_state.get("_process_clicked") and not st.session_state.get("doc_ready"):
