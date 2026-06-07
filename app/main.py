@@ -1446,51 +1446,70 @@ def render_tts(text, ks=""):
 
 
 def gen_prompts(text):
-    tpl = """You are helping a user explore a document. Generate exactly 6 smart,
-specific questions they would genuinely want answered after reading it.
+    """
+    Generate 6 smart, document-specific questions.
+    Samples from beginning + middle + end so questions
+    cover the whole document, not just the first few lines.
+    """
+    # ── Sample from 3 parts of the document ──────────────────────
+    length = len(text)
+    chunk = 1200  # chars per sample
 
-Document excerpt:
+    beginning = text[:chunk].strip()
+    middle     = text[length // 2 : length // 2 + chunk].strip()
+    ending     = text[max(0, length - chunk):].strip()
+
+    sampled = f"""--- START OF DOCUMENT ---
+{beginning}
+
+--- MIDDLE OF DOCUMENT ---
+{middle}
+
+--- END OF DOCUMENT ---
+{ending}"""
+
+    tpl = """You are reading a document. Based ONLY on what you see below,
+write exactly 6 questions that a real user would type into a chat box
+to learn more about this specific document.
+
+Document content:
 {text}
 
-STRICT RULES — read carefully before writing:
-- Questions MUST be about the document's CORE IDEAS, findings, arguments,
-  data, or recommendations — NOT about metadata (author, ISBN, publisher,
-  version, title, date, filename).
-- Each question must reference a SPECIFIC concept, term, person, statistic,
-  or claim that actually appears in the excerpt above.
-- Vary the type: include at least one "how", one "why", one "what", and one
-  analytical or comparative question.
-- Each question must be self-contained and meaningful on its own (a reader
-  should know exactly what to expect as an answer).
-- Maximum 10 words per question.
-- One question per line. No numbering, no bullets, no dashes, no quotes.
-- NEVER write: "What is [single word]", "Who is the author", "What is the ISBN",
-  "What is the publisher", "What is the version", or any question answerable
-  by a single metadata field.
+RULES — follow strictly:
+- Every question MUST mention a specific name, number, term, topic or
+  concept that actually appears in the document above.
+- Include a mix: at least one "how", one "why", one "what", one analytical.
+- Questions should feel natural — like something a user would actually type.
+- Do NOT write generic questions like "What is this document about?" or
+  "Who is the author?" or "What is the title?".
+- Do NOT write questions about metadata (date, version, publisher).
+- Each question must be under 12 words.
+- One question per line. No numbering, no bullets, no dashes.
 
-Questions (one per line):"""
+6 specific questions (one per line):"""
+
     try:
-        raw = llm_call(tpl, {"text": text[:4000]}, temp=0.5)
+        raw = llm_call(tpl, {"text": sampled}, temp=0.4)
         lines = []
         for ln in raw.strip().split("\n"):
             ln = re.sub(r"^[\d\.\-\*\x95\u2022]\s*", "", ln.strip()).strip()
             if not ln or len(ln) < 10:
                 continue
             lower = ln.lower()
-            skip_patterns = [
-                "what is the author", "who is the author",
+            # Skip clearly generic or metadata questions
+            bad = [
+                "what is this document", "who is the author",
                 "what is the isbn", "what is the publisher",
-                "what is the version", "what is the title",
-                "what is the date", "what is the edition",
+                "what is the title", "what is the date",
+                "what is the version", "what is the edition",
+                "what is the purpose of this",
             ]
-            if re.match(r"^what is \w+\??$", lower):
-                continue
-            if any(p in lower for p in skip_patterns):
+            if any(b in lower for b in bad):
                 continue
             if ln.startswith("#"):
                 continue
             lines.append(ln)
-        return lines[:6] if lines else _default_prompts()
+        return lines[:6] if len(lines) >= 2 else _default_prompts()
     except Exception:
         return _default_prompts()
 
