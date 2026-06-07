@@ -707,71 +707,105 @@ Rules:
 
 
 def gen_quiz(doc_text):
-    """Generate quiz with shuffled options so the correct answer is not always A."""
+    """
+    Generate 5 MCQ questions that test real understanding of the document.
+    Samples full document. Options shuffled so correct answer is never always A.
+    """
     import random
-    tpl = """Generate exactly 5 MCQ quiz questions from this document.
-Make questions diverse - factual, analytical, and conceptual.
-Do NOT make all questions about the same topic.
 
-Document: {text}
+    length = len(doc_text)
+    chunk = 1000
 
-EXACT format (blank line between questions):
-Q: [question text]
-CORRECT: [the correct answer]
-WRONG1: [plausible wrong option]
-WRONG2: [plausible wrong option]
-WRONG3: [plausible wrong option]
+    # Sample intelligently from 4 parts of the document
+    sections = [
+        doc_text[:chunk],
+        doc_text[length // 3 : length // 3 + chunk],
+        doc_text[2 * length // 3 : 2 * length // 3 + chunk],
+        doc_text[max(0, length - chunk):]
+    ]
+    sampled = "\n\n---\n\n".join(s.strip() for s in sections if s.strip())
 
-Rules:
-- CORRECT line = the right answer
-- WRONG lines = plausible but incorrect options
-- Questions must be answerable from document
-- Mix difficulty levels"""
+    tpl = """You are creating a quiz to test whether someone has carefully read this document.
+
+Document content (sampled from throughout):
+{text}
+
+Generate exactly 5 multiple choice questions. Each question must:
+- Test REAL understanding — not obvious or trivial facts
+- Reference a SPECIFIC detail (name, number, finding, category, result)
+  that is actually in the document above
+- Have 4 options where the wrong options are PLAUSIBLE (not obviously wrong)
+- Cover DIFFERENT sections/topics of the document
+- Range from factual recall to analytical reasoning
+
+FORBIDDEN question types:
+- "What is the title of the document?"
+- "Who wrote this document?"
+- Questions answerable without reading the document
+- Trick questions
+- Questions where all wrong answers are obviously wrong
+
+Use EXACTLY this format (blank line between questions):
+Q: [specific, meaningful question — 10-20 words]
+CORRECT: [the correct answer from the document]
+WRONG1: [plausible but incorrect option]
+WRONG2: [plausible but incorrect option]
+WRONG3: [plausible but incorrect option]
+
+5 questions:"""
+
     try:
-        raw = llm_call(tpl, {"text": doc_text[:3500]}, temp=0.5)
+        raw = llm_call(tpl, {"text": sampled}, temp=0.3)
         questions = []
         labels = ["A", "B", "C", "D"]
+
         for block in re.split(r"\n\s*\n", raw.strip()):
             parsed = {}
             for ln in [l.strip() for l in block.strip().split("\n") if l.strip()]:
                 if ":" in ln:
                     key, val = ln.split(":", 1)
                     parsed[key.strip().upper()] = val.strip()
+
             q_text = parsed.get("Q", "")
             correct_text = parsed.get("CORRECT", "")
-            wrongs = [parsed.get("WRONG1", ""), parsed.get("WRONG2", ""), parsed.get("WRONG3", "")]
-            wrongs = [w for w in wrongs if w and w != correct_text]
-            if not q_text or not correct_text or not wrongs:
+            wrongs = [
+                parsed.get("WRONG1", ""),
+                parsed.get("WRONG2", ""),
+                parsed.get("WRONG3", "")
+            ]
+            wrongs = [w for w in wrongs if w and w.lower() != correct_text.lower()]
+
+            # Skip trivial or forbidden questions
+            if not q_text or not correct_text or len(wrongs) < 2:
                 continue
+            q_lower = q_text.lower()
+            forbidden_q = [
+                "what is the title", "who wrote", "who is the author",
+                "what is the name of the document", "what type of document"
+            ]
+            if any(f in q_lower for f in forbidden_q):
+                continue
+
+            # Build and shuffle options
             all_opts = [correct_text] + wrongs[:3]
             while len(all_opts) < 4:
-                all_opts.append("None of the above")
+                all_opts.append("Not mentioned in the document")
             random.shuffle(all_opts)
-            correct_label = labels[all_opts.index(correct_text)]
+
+            try:
+                correct_label = labels[all_opts.index(correct_text)]
+            except ValueError:
+                continue
+
             options = [(labels[i], all_opts[i]) for i in range(len(all_opts))]
-            questions.append({"question": q_text, "options": options, "answer": correct_label})
-        if not questions:
-            for block in re.split(r"\n\s*\n", raw.strip()):
-                lines = [l.strip() for l in block.strip().split("\n") if l.strip()]
-                q, opts = {}, []
-                for ln in lines:
-                    if ln.startswith("Q:"):
-                        q["question"] = ln[2:].strip()
-                    elif len(ln) >= 3 and ln[1] == ":" and ln[0] in "ABCD":
-                        opts.append((ln[0], ln[2:].strip()))
-                    elif ln.upper().startswith("ANSWER:"):
-                        q["answer"] = ln.split(":", 1)[1].strip().upper()[:1]
-                if q.get("question") and len(opts) >= 2:
-                    answer_label = q.get("answer", "A")
-                    correct_opt = next((o for o in opts if o[0] == answer_label), opts[0])
-                    wrong_opts = [o for o in opts if o[0] != answer_label]
-                    all_opts_fb = [correct_opt[1]] + [o[1] for o in wrong_opts]
-                    random.shuffle(all_opts_fb)
-                    correct_lbl_fb = labels[all_opts_fb.index(correct_opt[1])]
-                    q["options"] = [(labels[i], all_opts_fb[i]) for i in range(len(all_opts_fb))]
-                    q["answer"] = correct_lbl_fb
-                    questions.append(q)
+            questions.append({
+                "question": q_text,
+                "options": options,
+                "answer": correct_label
+            })
+
         return questions[:5]
+
     except Exception as e:
         logger.error(f"gen_quiz: {e}")
         return []
@@ -1447,69 +1481,67 @@ def render_tts(text, ks=""):
 
 def gen_prompts(text):
     """
-    Generate 6 smart, document-specific questions.
-    Samples from beginning + middle + end so questions
-    cover the whole document, not just the first few lines.
+    Generate 6 smart, document-specific suggested questions.
+    Samples intelligently from the full document.
     """
-    # ── Sample from 3 parts of the document ──────────────────────
+    import random
     length = len(text)
-    chunk = 1200  # chars per sample
 
-    beginning = text[:chunk].strip()
-    middle     = text[length // 2 : length // 2 + chunk].strip()
-    ending     = text[max(0, length - chunk):].strip()
+    # Sample 4 sections: start, 1/3, 2/3, end
+    chunk = 900
+    sections = [
+        text[:chunk],
+        text[length // 3 : length // 3 + chunk],
+        text[2 * length // 3 : 2 * length // 3 + chunk],
+        text[max(0, length - chunk):]
+    ]
+    sampled = "\n\n---\n\n".join(s.strip() for s in sections if s.strip())
 
-    sampled = f"""--- START OF DOCUMENT ---
-{beginning}
+    tpl = """You are an expert analyst who has read the following document carefully.
 
---- MIDDLE OF DOCUMENT ---
-{middle}
-
---- END OF DOCUMENT ---
-{ending}"""
-
-    tpl = """You are reading a document. Based ONLY on what you see below,
-write exactly 6 questions that a real user would type into a chat box
-to learn more about this specific document.
-
-Document content:
+Document content (sampled from throughout):
 {text}
 
-RULES — follow strictly:
-- Every question MUST mention a specific name, number, term, topic or
-  concept that actually appears in the document above.
-- Include a mix: at least one "how", one "why", one "what", one analytical.
-- Questions should feel natural — like something a user would actually type.
-- Do NOT write generic questions like "What is this document about?" or
-  "Who is the author?" or "What is the title?".
-- Do NOT write questions about metadata (date, version, publisher).
-- Each question must be under 12 words.
-- One question per line. No numbering, no bullets, no dashes.
+Your task: Write exactly 6 questions that a professional user would ask
+to get deep, useful insights from this document.
 
-6 specific questions (one per line):"""
+STRICT REQUIREMENTS:
+- Each question MUST reference a SPECIFIC person, number, finding, term,
+  category, score, percentage, or concept that actually appears above.
+- Questions must require actual reading of the document to answer —
+  not common knowledge.
+- At least 2 questions must be ANALYTICAL (e.g. "Why did X happen?",
+  "What is the significance of Y?", "How does A compare to B?").
+- At least 1 question must ask about a SPECIFIC NUMBER or DATA POINT
+  visible in the document.
+- At least 1 question must be about a PATTERN or TREND in the data.
+- FORBIDDEN question types: "What is the title?", "Who is the author?",
+  "What is this document about?", "What is the purpose?",
+  "What are the main topics?", any question answerable in 1 word.
+- Each question: 8-15 words, ends with "?"
+- One question per line. No numbering. No bullets.
+
+6 high-quality questions:"""
 
     try:
-        raw = llm_call(tpl, {"text": sampled}, temp=0.4)
+        raw = llm_call(tpl, {"text": sampled}, temp=0.3)
         lines = []
+        forbidden = [
+            "what is this document", "what is the title",
+            "who is the author", "what is the purpose",
+            "what are the main", "what is the document about",
+            "what is the overview", "what does this document",
+            "what is the subject",
+        ]
         for ln in raw.strip().split("\n"):
-            ln = re.sub(r"^[\d\.\-\*\x95\u2022]\s*", "", ln.strip()).strip()
-            if not ln or len(ln) < 10:
+            ln = re.sub(r"^[\d\.\-\*\x95\u2022\)]\s*", "", ln.strip()).strip()
+            if not ln or len(ln) < 15 or not ln.endswith("?"):
                 continue
             lower = ln.lower()
-            # Skip clearly generic or metadata questions
-            bad = [
-                "what is this document", "who is the author",
-                "what is the isbn", "what is the publisher",
-                "what is the title", "what is the date",
-                "what is the version", "what is the edition",
-                "what is the purpose of this",
-            ]
-            if any(b in lower for b in bad):
-                continue
-            if ln.startswith("#"):
+            if any(f in lower for f in forbidden):
                 continue
             lines.append(ln)
-        return lines[:6] if len(lines) >= 2 else _default_prompts()
+        return lines[:6] if len(lines) >= 3 else _default_prompts()
     except Exception:
         return _default_prompts()
 
